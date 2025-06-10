@@ -1,0 +1,180 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strings"
+	"time"
+)
+
+type Client struct {
+	baseURL    string
+	httpClient *http.Client
+	cookie     string
+}
+
+func NewClient(baseURL string) (*Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
+	}
+
+	return &Client{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		httpClient: &http.Client{
+			Jar:     jar,
+			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+func (c *Client) Login(username, password string) error {
+	data := url.Values{
+		"username": {username},
+		"password": {password},
+	}
+
+	req, err := http.NewRequest("POST", c.baseURL+"/api/v2/auth/login", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create login request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("login request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	responseStr := strings.TrimSpace(string(body))
+	if responseStr == "Fails." {
+		return fmt.Errorf("invalid username or password")
+	}
+
+	for _, cookie := range c.httpClient.Jar.Cookies(resp.Request.URL) {
+		if cookie.Name == "SID" {
+			c.cookie = cookie.Value
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) GetTorrents(ctx context.Context) ([]Torrent, error) {
+	return c.GetTorrentsFiltered(ctx, nil)
+}
+
+func (c *Client) GetTorrentsFiltered(ctx context.Context, filter map[string]string) ([]Torrent, error) {
+	endpoint := "/api/v2/torrents/info"
+	if filter != nil && len(filter) > 0 {
+		params := url.Values{}
+		for k, v := range filter {
+			params.Set(k, v)
+		}
+		endpoint += "?" + params.Encode()
+	}
+
+	var torrents []Torrent
+	if err := c.get(ctx, endpoint, &torrents); err != nil {
+		return nil, fmt.Errorf("failed to get torrents: %w", err)
+	}
+
+	return torrents, nil
+}
+
+func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
+	// Get transfer info
+	var stats GlobalStats
+	if err := c.get(ctx, "/api/v2/transfer/info", &stats); err != nil {
+		return nil, fmt.Errorf("failed to get transfer info: %w", err)
+	}
+
+	// Get maindata for free disk space
+	var mainData MainData
+	if err := c.get(ctx, "/api/v2/sync/maindata", &mainData); err != nil {
+		// Log warning but don't fail - free space is not critical
+		// In a real app you'd use a proper logger here
+		// For now, just continue with stats.FreeSpaceOnDisk = 0
+	} else {
+		// Merge free space from maindata
+		stats.FreeSpaceOnDisk = mainData.ServerState.FreeSpaceOnDisk
+	}
+
+	return &stats, nil
+}
+
+func (c *Client) GetTorrentProperties(ctx context.Context, hash string) (*TorrentProperties, error) {
+	endpoint := fmt.Sprintf("/api/v2/torrents/properties?hash=%s", hash)
+
+	var props TorrentProperties
+	if err := c.get(ctx, endpoint, &props); err != nil {
+		return nil, fmt.Errorf("failed to get torrent properties: %w", err)
+	}
+
+	return &props, nil
+}
+
+func (c *Client) GetCategories(ctx context.Context) (map[string]interface{}, error) {
+	var categories map[string]interface{}
+	if err := c.get(ctx, "/api/v2/torrents/categories", &categories); err != nil {
+		return nil, fmt.Errorf("failed to get categories: %w", err)
+	}
+
+	return categories, nil
+}
+
+func (c *Client) GetTags(ctx context.Context) ([]string, error) {
+	var tags []string
+	if err := c.get(ctx, "/api/v2/torrents/tags", &tags); err != nil {
+		return nil, fmt.Errorf("failed to get tags: %w", err)
+	}
+
+	return tags, nil
+}
+
+func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Referer", c.baseURL)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("authentication required (403 Forbidden)")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return nil
+}

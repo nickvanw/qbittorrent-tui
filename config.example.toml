@@ -1,0 +1,8 @@
+[server]
+url = "http://localhost:8080"
+username = "admin"
+password = "adminpass"
+
+[ui]
+refresh_interval = 3  # seconds
+theme = "default"

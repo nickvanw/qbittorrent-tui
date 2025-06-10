@@ -1,0 +1,112 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  build-tags:
+    - integration
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  
+  gocyclo:
+    min-complexity: 15
+  
+  gofmt:
+    simplify: true
+  
+  goimports:
+    local-prefixes: github.com/nickvanw/qbitorrent-tui
+  
+  govet:
+    check-shadowing: true
+    enable-all: true
+  
+  lll:
+    line-length: 120
+  
+  misspell:
+    locale: US
+  
+  nakedret:
+    max-func-lines: 30
+  
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+  
+  unparam:
+    check-exported: false
+  
+  unused:
+    check-exported: false
+  
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - gocyclo
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  
+  disable:
+    - gochecknoglobals
+    - godot
+    - godox
+    - goerr113
+    - nestif
+    - testpackage
+    - wsl
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - funlen
+        - lll
+    
+    # Exclude some linters from running on mock files
+    - path: mock\.go
+      linters:
+        - errcheck
+        - gosec
+        - unused
+    
+    # Allow long lines in generated files
+    - path: ".*\\.pb\\.go"
+      linters:
+        - lll
+
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
