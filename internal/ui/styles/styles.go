@@ -2,6 +2,8 @@ package styles
 
 import (
 	"fmt"
+	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -43,6 +45,9 @@ var (
 
 	DimStyle = lipgloss.NewStyle().
 			Foreground(DimTextColor)
+	
+	TextStyle = lipgloss.NewStyle().
+			Foreground(TextColor)
 
 	// Status styles
 	DownloadingStyle = lipgloss.NewStyle().
@@ -63,6 +68,10 @@ var (
 
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(ErrorColor).
+			Bold(true)
+
+	AccentStyle = lipgloss.NewStyle().
+			Foreground(AccentColor).
 			Bold(true)
 
 	// Progress bar styles
@@ -138,11 +147,72 @@ func FormatSpeed(bytesPerSec int64) string {
 
 // TruncateString truncates a string to a maximum length with ellipsis
 func TruncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		// For very short maxLen, just truncate to the length
+		runes := []rune(s)
+		if len(runes) <= maxLen {
+			return s
+		}
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	
+	// Truncate and add ellipsis
+	runes := []rune(s)
+	if len(runes) <= maxLen-3 {
+		return s
+	}
+	return string(runes[:maxLen-3]) + "..."
+}
+
+// FormatDuration formats seconds into human-readable duration
+func FormatDuration(seconds int64) string {
+	if seconds <= 0 {
+		return "∞"
+	}
+	d := time.Duration(seconds) * time.Second
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		hours := int(d.Hours())
+		minutes := int(d.Minutes()) % 60
+		if minutes > 0 {
+			return fmt.Sprintf("%dh%dm", hours, minutes)
+		}
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	if hours > 0 {
+		return fmt.Sprintf("%dd%dh", days, hours)
+	}
+	return fmt.Sprintf("%dd", days)
+}
+
+// FormatTime formats Unix timestamp to human-readable time
+func FormatTime(timestamp int64) string {
+	if timestamp <= 0 {
+		return "-"
+	}
+	t := time.Unix(timestamp, 0)
+	now := time.Now()
+	
+	// If today, show time only
+	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+		return t.Format("15:04")
+	}
+	
+	// If this year, show month and day
+	if t.Year() == now.Year() {
+		return t.Format("Jan 02")
+	}
+	
+	// Otherwise show full date
+	return t.Format("2006-01-02")
 }

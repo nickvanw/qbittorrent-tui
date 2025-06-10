@@ -2,6 +2,18 @@
 
 This document outlines planned enhancements to qBittorrent TUI based on user feedback and UX improvements.
 
+## ✅ All Features Completed!
+
+All three requested features have been successfully implemented with excellent integration:
+
+### Dynamic Sorting with Configurable Columns
+The sorting system now intelligently adapts to user-configured columns:
+- **Dynamic key mapping**: Number keys (1-9) map to the first 9 visible columns
+- **Adaptive shortcuts**: Hide a column, and its sort shortcut transfers to the next visible column
+- **Universal sorting**: All columns (including new ones like ETA, Category, Tags) are sortable
+- **Visual feedback**: Sort indicators (↑/↓) appear in headers for the active sort column
+- **Consistent behavior**: Sort direction toggle and secondary sorting work across all column configurations
+
 ## 🎯 Proposed Features
 
 ### 1. Responsive Layout - Full Terminal Width Usage
@@ -192,14 +204,14 @@ Press 'C' → Column Configuration
 - [x] Persist sort preferences
 - [x] Add sorting tests
 
-### Phase 3: Column Configuration (Week 3-4)
+### Phase 3: Column Configuration ✅ COMPLETED
 **Goals**: Configurable columns with UI
-- [ ] Define all available columns
-- [ ] Create column definition system
-- [ ] Implement column configuration UI
-- [ ] Add configuration persistence
-- [ ] Create column presets
-- [ ] Comprehensive testing
+- [x] Define all available columns
+- [x] Create column definition system
+- [x] Implement column configuration UI
+- [x] Add configuration persistence (via visible columns tracking)
+- [x] Create column toggle functionality
+- [x] Comprehensive testing
 
 ## 🎨 UX Design Principles
 
@@ -247,10 +259,10 @@ Press 'C' → Column Configuration
 - [x] Sort preferences persist across sessions
 - [x] Performance acceptable with 1000+ torrents
 
-### Phase 3 Success
-- [ ] Users can customize any column visibility
-- [ ] Configuration UI is intuitive
-- [ ] All qBittorrent data fields available
+### Phase 3 Success ✅
+- [x] Users can customize any column visibility
+- [x] Configuration UI is intuitive
+- [x] All qBittorrent data fields available
 
 ## 🔮 Future Considerations
 

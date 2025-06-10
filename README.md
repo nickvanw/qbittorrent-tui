@@ -12,6 +12,9 @@ A terminal-based user interface for monitoring and managing qBittorrent. Built w
 - **Torrent details** - Drill down into individual torrent information
 - **Global statistics** - Download/upload speeds, connection status, disk space
 - **Flexible configuration** - TOML config files, environment variables, or CLI flags
+- **Responsive layout** - Automatically uses full terminal width
+- **Column sorting** - Sort by any column with visual indicators
+- **Configurable columns** - Show/hide columns including ETA, dates, and more
 
 ## Installation
 
@@ -99,13 +102,15 @@ qbt-tui --help  # See all available options
 ### Sorting
 | Key | Action |
 |-----|--------|
-| `1` | Sort by name |
-| `2` | Sort by size |
-| `3` | Sort by progress |
-| `4` | Sort by state |
-| `5` | Sort by download speed |
-| `6` | Sort by upload speed |
-| `Shift+[1-6]` | Reverse sort direction |
+| `1-9` | Sort by visible column (1st-9th) |
+| `Shift+[1-9]` | Reverse sort direction |
+
+**Note**: Sorting keys dynamically map to visible columns. Press `1` to sort by the first visible column, `2` for the second, etc. The column headers show sort indicators (↑/↓).
+
+### Columns
+| Key | Action |
+|-----|--------|
+| `C` | Configure columns |
 
 ### Actions
 | Key | Action |

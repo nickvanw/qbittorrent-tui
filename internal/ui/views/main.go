@@ -377,6 +377,12 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case msg.String() == "C": // Column configuration
+			if m.viewMode == ViewModeMain {
+				m.torrentList, cmd = m.torrentList.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+
 		case msg.String() == "c": // Category filter
 			if m.viewMode == ViewModeMain {
 				oldFilter := m.filterPanel.GetFilter()
@@ -425,6 +431,10 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Pass key events to components based on view mode
 			if m.viewMode == ViewModeDetails {
 				m.torrentDetails, cmd = m.torrentDetails.Update(msg)
+				cmds = append(cmds, cmd)
+			} else if m.torrentList.IsInConfigMode() {
+				// Torrent list is in column config mode - let it handle all keys
+				m.torrentList, cmd = m.torrentList.Update(msg)
 				cmds = append(cmds, cmd)
 			} else if m.filterPanel.IsInInteractiveMode() {
 				// Filter panel is in interactive mode (state/category/tracker/tag selection)
