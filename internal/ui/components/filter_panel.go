@@ -423,7 +423,13 @@ func (f *FilterPanel) toggleSelection() {
 		}
 	case FilterModeCategory:
 		if f.cursor < len(f.availableCategories) {
-			f.filter.Category = f.availableCategories[f.cursor]
+			category := f.availableCategories[f.cursor]
+			// Toggle category: if already selected, clear it; otherwise set it
+			if f.filter.Category == category {
+				f.filter.Category = ""
+			} else {
+				f.filter.Category = category
+			}
 		}
 	case FilterModeTracker:
 		if f.cursor < len(f.availableTrackers) {
@@ -450,6 +456,9 @@ func (f *FilterPanel) selectAll() {
 	switch f.mode {
 	case FilterModeState:
 		f.filter.States = append([]string{}, f.availableStates...)
+	case FilterModeCategory:
+		// Categories are single-select, so "select all" doesn't apply
+		// Do nothing
 	case FilterModeTracker:
 		f.filter.Trackers = append([]string{}, f.availableTrackers...)
 	case FilterModeTag:

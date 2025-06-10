@@ -367,7 +367,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle global filter keys BEFORE passing to components (to avoid conflicts)
 		case msg.String() == "s": // State filter
-			if m.viewMode == ViewModeMain {
+			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
 				cmds = append(cmds, cmd)
@@ -384,7 +384,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case msg.String() == "c": // Category filter
-			if m.viewMode == ViewModeMain {
+			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
 				cmds = append(cmds, cmd)
@@ -395,7 +395,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case msg.String() == "t": // Tracker filter
-			if m.viewMode == ViewModeMain {
+			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
 				cmds = append(cmds, cmd)
@@ -406,7 +406,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case msg.String() == "a": // Tag filter (tAgs)
-			if m.viewMode == ViewModeMain {
+			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
 				cmds = append(cmds, cmd)
