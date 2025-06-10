@@ -1,64 +1,61 @@
-# qBittorrent TUI Project Notes
+# qBittorrent TUI - Claude Development Notes
 
-## Important: qBittorrent Authentication Configuration
+## Project Overview
 
-The qBittorrent WebUI has specific authentication requirements when accessing from outside the Docker container:
+A fully-featured Terminal UI for qBittorrent with responsive layout, dynamic sorting, and configurable columns. All core features are complete and working.
 
-1. **Password**: The test password is `testpass123`
-2. **Config File**: Use `testdata/qBittorrent-working.conf` which has proper authentication settings
-3. **Key Settings**:
-   - `bypass_local_auth` must be `false` (not just `LocalHostAuth=false` in config)
-   - CSRF protection is disabled for testing
-   - Host header validation is disabled for testing
+## Key Technical Details
 
-## Integration Tests
+### qBittorrent Authentication
+- **Test password**: `testpass123`
+- **Config file**: Use `testdata/qBittorrent-working.conf`
+- **Critical**: `bypass_local_auth` must be `false` in qBittorrent config
 
-Run integration tests with:
+### Integration Tests
 ```bash
 QBT_TEST_PASSWORD="testpass123" go test -v -tags=integration ./internal/api
 ```
 
-## Project Status
-
-✅ Phase 1: Foundation (API client, config, types) - COMPLETE
-✅ Phase 2: Filter system - COMPLETE (98.9% coverage)
-✅ Phase 3: TUI implementation - COMPLETE
-✅ Phase 4: API integration - COMPLETE  
-✅ Phase 5: Details view - COMPLETE
-
-## CLI Usage
-
-The application now has a comprehensive command-line interface:
-
+### Build & Test
 ```bash
-# Using command line flags
-qbt-tui --url http://localhost:8080 --username admin --password secret
-
-# Using environment variables
-QBT_SERVER_URL=http://localhost:8080 QBT_SERVER_USERNAME=admin qbt-tui
-
-# Using config file (~/.config/qbt-tui/config.toml)
-[server]
-url = "http://localhost:8080"
-username = "admin" 
-password = "secret"
-
-[ui]
-refresh_interval = 5
-theme = "default"
+make validate  # Full validation suite
+go test ./...  # Unit tests
 ```
 
-Available flags:
-- `--url`, `-u`: qBittorrent WebUI URL (required)
-- `--username`: qBittorrent username
-- `--password`, `-p`: qBittorrent password  
-- `--refresh`, `-r`: Refresh interval in seconds (default: 3)
-- `--theme`, `-t`: UI theme (default: default)
-- `--config`: Custom config file path
-- `--help`, `-h`: Show comprehensive help
+## Architecture
 
-## Test Coverage Goals
+### Core Components
+- **API client** (`internal/api/`) - qBittorrent WebUI API integration
+- **Filter system** (`internal/filter/`) - Multi-criteria torrent filtering
+- **TUI components** (`internal/ui/components/`) - Bubble Tea UI components
+- **Configuration** (`internal/config/`) - TOML config management
 
-- API package: >80% ✅ (80.5%)
-- Config package: >80% ✅ (89.3%)
-- Filter package: >80% ✅ (98.9%)
+### Key Features Implemented
+- ✅ **Responsive layout** - Dynamic column sizing based on terminal width
+- ✅ **Torrent sorting** - Sort by any column with keyboard shortcuts (1-9)
+- ✅ **Configurable columns** - Show/hide 14 available columns via 'C' key
+- ✅ **Advanced filtering** - State, category, tracker, tag, and text search
+- ✅ **Real-time updates** - Configurable refresh interval
+- ✅ **Torrent details** - Drill-down view with Enter key
+
+## Configuration
+
+### CLI Usage
+```bash
+# Command line
+qbt-tui --url http://localhost:8080 --username admin --password secret
+
+# Environment variables  
+QBT_SERVER_URL=http://localhost:8080 qbt-tui
+
+# Config file (~/.config/qbt-tui/config.toml)
+[server]
+url = "http://localhost:8080"
+username = "admin"
+password = "secret"
+```
+
+## Test Coverage
+- API package: 80.5%
+- Config package: 89.3%  
+- Filter package: 98.9%
