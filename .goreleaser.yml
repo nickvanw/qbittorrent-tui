@@ -84,18 +84,6 @@ release:
     qbt-tui --url http://localhost:8080 --username admin --password yourpass
     ```
 
-homebrew_formulas:
-  - name: qbt-tui
-    repository:
-      owner: nickvanw
-      name: homebrew-tap
-    directory: Formula
-    homepage: https://github.com/nickvanw/qbitorrent-tui
-    description: "Terminal UI for qBittorrent"
-    license: MIT
-    test: |
-      system "#{bin}/qbt-tui --help"
-
 nfpms:
   - id: packages
     package_name: qbt-tui
