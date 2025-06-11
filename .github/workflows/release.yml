@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (optional - will use latest commit if empty)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -27,7 +33,7 @@ jobs:
       with:
         distribution: goreleaser
         version: latest
-        args: release --clean
+        args: ${{ github.event_name == 'workflow_dispatch' && 'build --snapshot --clean' || 'release --clean' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
