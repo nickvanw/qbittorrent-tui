@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ type (
 	tagsDataMsg       []string
 	errorMsg          error
 	tickMsg           time.Time
+	clearErrorMsg     struct{}
 )
 
 // MainView is the main application view
@@ -78,6 +80,11 @@ type KeyMap struct {
 	Filter  key.Binding
 	Help    key.Binding
 	Quit    key.Binding
+
+	// Torrent control
+	Pause  key.Binding
+	Resume key.Binding
+	Delete key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view
@@ -89,6 +96,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter, k.Escape}, // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete},     // Torrent Control
 		{k.Refresh, k.Filter},             // Features
 		{k.Help, k.Quit},                  // General
 	}
@@ -129,6 +137,20 @@ func DefaultKeyMap() KeyMap {
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
+		),
+
+		// Torrent control
+		Pause: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "pause"),
+		),
+		Resume: key.NewBinding(
+			key.WithKeys("u"),
+			key.WithHelp("u", "unpause/resume"),
+		),
+		Delete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete"),
 		),
 	}
 }
@@ -227,6 +249,13 @@ func (m *MainView) tickCmd() tea.Cmd {
 	})
 }
 
+// clearErrorTimer creates a timer to clear errors after 5 seconds
+func (m *MainView) clearErrorTimer() tea.Cmd {
+	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+		return clearErrorMsg{}
+	})
+}
+
 // Update handles messages
 func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -244,6 +273,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.allTorrents = []api.Torrent(msg)
 		m.applyFilter()
 		m.isLoading = false
+		// Don't auto-clear errors here - let timer handle it
 
 		// Update torrent details if currently viewing a torrent
 		if m.viewMode == ViewModeDetails {
@@ -279,6 +309,11 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errorMsg:
 		m.lastError = error(msg)
 		m.isLoading = false
+		// Start timer to clear error after 5 seconds
+		cmds = append(cmds, m.clearErrorTimer())
+
+	case clearErrorMsg:
+		m.lastError = nil
 
 	case components.DetailsDataMsg:
 		// Pass details data to torrent details component
@@ -296,6 +331,8 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Don't clear errors immediately on keypress - let them persist until next action
+
 		// If filter panel is in input mode, let it handle all keys except quit
 		if m.filterPanel.IsInInputMode() {
 			switch {
@@ -374,6 +411,19 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
+
+		// Torrent control actions - handle these BEFORE other key delegation
+		case key.Matches(msg, m.keys.Pause):
+			cmd = m.handlePauseTorrent()
+			cmds = append(cmds, cmd)
+
+		case key.Matches(msg, m.keys.Resume):
+			cmd = m.handleResumeTorrent()
+			cmds = append(cmds, cmd)
+
+		case key.Matches(msg, m.keys.Delete):
+			cmd = m.handleDeleteTorrent()
+			cmds = append(cmds, cmd)
 
 		// Handle global filter keys BEFORE passing to components (to avoid conflicts)
 		case msg.String() == "s": // State filter
@@ -506,9 +556,14 @@ func (m *MainView) View() string {
 	filterView := m.renderFilterPanel(m.width, filterHeight)
 	sections = append(sections, filterView)
 
-	// Help at the very bottom
-	helpView := m.help.View(m.keys)
-	sections = append(sections, helpView)
+	// Status line at the very bottom - either error (in red) or help
+	var statusView string
+	if m.lastError != nil {
+		statusView = styles.ErrorStyle.Render(fmt.Sprintf("Error: %v", m.lastError))
+	} else {
+		statusView = m.help.View(m.keys)
+	}
+	sections = append(sections, statusView)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
@@ -564,6 +619,90 @@ func (m *MainView) updateDimensions() {
 func (m *MainView) applyFilter() {
 	m.torrents = m.currentFilter.Apply(m.allTorrents)
 	m.torrentList.SetTorrents(m.torrents)
+}
+
+// handlePauseTorrent pauses the currently selected torrent
+func (m *MainView) handlePauseTorrent() tea.Cmd {
+	selectedHash := m.getSelectedTorrentHash()
+	if selectedHash == "" {
+		// Return an error message to help debug
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("no torrent selected"))
+		}
+	}
+
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			err := m.apiClient.PauseTorrents(ctx, []string{selectedHash})
+			if err != nil {
+				return errorMsg(fmt.Errorf("failed to pause torrent: %w", err))
+			}
+			return clearErrorMsg{} // Clear any previous errors on success
+		},
+		// Trigger immediate refresh to show updated state
+		m.fetchAllData(),
+	)
+}
+
+// handleResumeTorrent resumes the currently selected torrent
+func (m *MainView) handleResumeTorrent() tea.Cmd {
+	selectedHash := m.getSelectedTorrentHash()
+	if selectedHash == "" {
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("no torrent selected"))
+		}
+	}
+
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			err := m.apiClient.ResumeTorrents(ctx, []string{selectedHash})
+			if err != nil {
+				return errorMsg(fmt.Errorf("failed to resume torrent: %w", err))
+			}
+			return clearErrorMsg{} // Clear any previous errors on success
+		},
+		// Trigger immediate refresh to show updated state
+		m.fetchAllData(),
+	)
+}
+
+// handleDeleteTorrent deletes the currently selected torrent (with confirmation)
+func (m *MainView) handleDeleteTorrent() tea.Cmd {
+	selectedHash := m.getSelectedTorrentHash()
+	if selectedHash == "" {
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("no torrent selected"))
+		}
+	}
+
+	// TODO: Add confirmation dialog
+	// For now, delete without files (safer default)
+	return tea.Batch(
+		func() tea.Msg {
+			ctx := context.Background()
+			err := m.apiClient.DeleteTorrents(ctx, []string{selectedHash}, false)
+			if err != nil {
+				return errorMsg(fmt.Errorf("failed to delete torrent: %w", err))
+			}
+			return clearErrorMsg{} // Clear any previous errors on success
+		},
+		// Trigger immediate refresh to show updated list
+		m.fetchAllData(),
+	)
+}
+
+// getSelectedTorrentHash returns the hash of the currently selected torrent
+func (m *MainView) getSelectedTorrentHash() string {
+	if m.viewMode == ViewModeDetails {
+		// In details view, use the torrent list's selected hash
+		return m.torrentList.GetSelectedHash()
+	} else if m.viewMode == ViewModeMain {
+		// In main view, use the torrent list's selected hash
+		return m.torrentList.GetSelectedHash()
+	}
+	return ""
 }
 
 // extractCategoryNames extracts category names from the categories map
@@ -648,8 +787,13 @@ func (m *MainView) renderDetailsView() string {
 	content := m.torrentDetails.View()
 	detailsPanel := styles.FocusedPanelStyle.Width(m.width).Height(contentHeight).Render(content)
 
-	// Add help at the bottom
-	helpView := m.help.View(m.keys)
+	// Status line at the bottom - either error (in red) or help
+	var statusView string
+	if m.lastError != nil {
+		statusView = styles.ErrorStyle.Render(fmt.Sprintf("Error: %v", m.lastError))
+	} else {
+		statusView = m.help.View(m.keys)
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, detailsPanel, helpView)
+	return lipgloss.JoinVertical(lipgloss.Left, detailsPanel, statusView)
 }

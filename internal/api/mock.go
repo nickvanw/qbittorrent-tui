@@ -263,6 +263,42 @@ func GenerateMockTorrents(count int) []Torrent {
 	return torrents
 }
 
+// PauseTorrents simulates pausing torrents
+func (m *MockClient) PauseTorrents(ctx context.Context, hashes []string) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would pause the torrents
+	return nil
+}
+
+// ResumeTorrents simulates resuming torrents
+func (m *MockClient) ResumeTorrents(ctx context.Context, hashes []string) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would resume the torrents
+	return nil
+}
+
+// DeleteTorrents simulates deleting torrents
+func (m *MockClient) DeleteTorrents(ctx context.Context, hashes []string, deleteFiles bool) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would delete the torrents
+	return nil
+}
+
 // SetupMockClientWithData creates a mock client with predefined test data
 func SetupMockClientWithData() *MockClient {
 	client := NewMockClient()

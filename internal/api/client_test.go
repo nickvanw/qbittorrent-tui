@@ -544,3 +544,41 @@ func TestGenerateMockTorrents(t *testing.T) {
 	}
 	assert.Greater(t, len(states), 1, "Should have multiple states")
 }
+
+func TestTorrentControlMethods(t *testing.T) {
+	mock := NewMockClient()
+	mock.LoggedIn = true
+	ctx := context.Background()
+
+	hashes := []string{"hash1", "hash2"}
+
+	// Test PauseTorrents
+	err := mock.PauseTorrents(ctx, hashes)
+	assert.NoError(t, err)
+
+	// Test ResumeTorrents
+	err = mock.ResumeTorrents(ctx, hashes)
+	assert.NoError(t, err)
+
+	// Test DeleteTorrents without files
+	err = mock.DeleteTorrents(ctx, hashes, false)
+	assert.NoError(t, err)
+
+	// Test DeleteTorrents with files
+	err = mock.DeleteTorrents(ctx, hashes, true)
+	assert.NoError(t, err)
+
+	// Test authentication required
+	mock.LoggedIn = false
+	err = mock.PauseTorrents(ctx, hashes)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+
+	err = mock.ResumeTorrents(ctx, hashes)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+
+	err = mock.DeleteTorrents(ctx, hashes, false)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+}

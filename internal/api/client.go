@@ -185,6 +185,107 @@ func (c *Client) GetTorrentFiles(ctx context.Context, hash string) ([]TorrentFil
 	return files, nil
 }
 
+// PauseTorrents pauses one or more torrents
+func (c *Client) PauseTorrents(ctx context.Context, hashes []string) error {
+	hashParam := strings.Join(hashes, "|")
+
+	data := url.Values{
+		"hashes": {hashParam},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/stop", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create pause request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("pause request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("pause failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// ResumeTorrents resumes one or more torrents
+func (c *Client) ResumeTorrents(ctx context.Context, hashes []string) error {
+	hashParam := strings.Join(hashes, "|")
+
+	data := url.Values{
+		"hashes": {hashParam},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/start", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create resume request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("resume request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("resume failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// DeleteTorrents deletes one or more torrents
+func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFiles bool) error {
+	hashParam := strings.Join(hashes, "|")
+	deleteFilesParam := "false"
+	if deleteFiles {
+		deleteFilesParam = "true"
+	}
+
+	data := url.Values{
+		"hashes":      {hashParam},
+		"deleteFiles": {deleteFilesParam},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/delete", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("delete failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {

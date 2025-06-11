@@ -17,6 +17,11 @@ type ClientInterface interface {
 	GetTorrentPeers(ctx context.Context, hash string) (map[string]Peer, error)
 	GetTorrentFiles(ctx context.Context, hash string) ([]TorrentFile, error)
 
+	// Torrent control
+	PauseTorrents(ctx context.Context, hashes []string) error
+	ResumeTorrents(ctx context.Context, hashes []string) error
+	DeleteTorrents(ctx context.Context, hashes []string, deleteFiles bool) error
+
 	// Global operations
 	GetGlobalStats(ctx context.Context) (*GlobalStats, error)
 	GetCategories(ctx context.Context) (map[string]interface{}, error)
