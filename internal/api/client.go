@@ -83,7 +83,7 @@ func (c *Client) GetTorrents(ctx context.Context) ([]Torrent, error) {
 
 func (c *Client) GetTorrentsFiltered(ctx context.Context, filter map[string]string) ([]Torrent, error) {
 	endpoint := "/api/v2/torrents/info"
-	if filter != nil && len(filter) > 0 {
+	if len(filter) > 0 {
 		params := url.Values{}
 		for k, v := range filter {
 			params.Set(k, v)
@@ -168,7 +168,10 @@ func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("request failed with status %d (failed to read body: %w)", resp.StatusCode, err)
+		}
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

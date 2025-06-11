@@ -15,9 +15,9 @@ import (
 
 // SortConfig represents the current sort configuration
 type SortConfig struct {
-	Column    string    // Column key to sort by
-	Direction SortDir   // Sort direction
-	Secondary string    // Secondary sort column (for ties)
+	Column    string  // Column key to sort by
+	Direction SortDir // Sort direction
+	Secondary string  // Secondary sort column (for ties)
 }
 
 // SortDir represents sort direction
@@ -37,10 +37,10 @@ type TorrentList struct {
 	width          int
 	selectedHash   string
 	showProgress   bool
-	columns        []Column    // Calculated columns for current width
-	sortConfig     SortConfig  // Current sort configuration
-	visibleColumns []string    // List of visible column keys
-	showConfig     bool        // Whether to show column config overlay
+	columns        []Column   // Calculated columns for current width
+	sortConfig     SortConfig // Current sort configuration
+	visibleColumns []string   // List of visible column keys
+	showConfig     bool       // Whether to show column config overlay
 }
 
 // ColumnConfig represents a responsive table column
@@ -58,17 +58,17 @@ var allColumns = []ColumnConfig{
 	{Key: "name", Title: "Name", MinWidth: 20, MaxWidth: 0, FlexGrow: 0.6, Priority: 1},
 	{Key: "size", Title: "Size", MinWidth: 8, MaxWidth: 12, FlexGrow: 0.0, Priority: 3},
 	{Key: "progress", Title: "Progress", MinWidth: 10, MaxWidth: 13, FlexGrow: 0.0, Priority: 2}, // "Progress ↑" = 10 chars
-	{Key: "status", Title: "Status", MinWidth: 8, MaxWidth: 15, FlexGrow: 0.1, Priority: 2},   // "Status ↑" = 8 chars
-	{Key: "down", Title: "Down", MinWidth: 6, MaxWidth: 15, FlexGrow: 0.1, Priority: 3},       // "Down ↑" = 6 chars
-	{Key: "up", Title: "Up", MinWidth: 4, MaxWidth: 15, FlexGrow: 0.1, Priority: 4},           // "Up ↑" = 4 chars
-	{Key: "seeds", Title: "Seeds", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 4},    // "Seeds ↑" = 7 chars
-	{Key: "peers", Title: "Peers", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 5},    // "Peers ↑" = 7 chars
-	{Key: "ratio", Title: "Ratio", MinWidth: 7, MaxWidth: 10, FlexGrow: 0.0, Priority: 5},     // "Ratio ↑" = 7 chars
-	{Key: "eta", Title: "ETA", MinWidth: 5, MaxWidth: 15, FlexGrow: 0.05, Priority: 6},        // "ETA ↑" = 5 chars
-	{Key: "added_on", Title: "Added", MinWidth: 7, MaxWidth: 20, FlexGrow: 0.05, Priority: 7}, // "Added ↑" = 7 chars
+	{Key: "status", Title: "Status", MinWidth: 8, MaxWidth: 15, FlexGrow: 0.1, Priority: 2},      // "Status ↑" = 8 chars
+	{Key: "down", Title: "Down", MinWidth: 6, MaxWidth: 15, FlexGrow: 0.1, Priority: 3},          // "Down ↑" = 6 chars
+	{Key: "up", Title: "Up", MinWidth: 4, MaxWidth: 15, FlexGrow: 0.1, Priority: 4},              // "Up ↑" = 4 chars
+	{Key: "seeds", Title: "Seeds", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 4},       // "Seeds ↑" = 7 chars
+	{Key: "peers", Title: "Peers", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 5},       // "Peers ↑" = 7 chars
+	{Key: "ratio", Title: "Ratio", MinWidth: 7, MaxWidth: 10, FlexGrow: 0.0, Priority: 5},        // "Ratio ↑" = 7 chars
+	{Key: "eta", Title: "ETA", MinWidth: 5, MaxWidth: 15, FlexGrow: 0.05, Priority: 6},           // "ETA ↑" = 5 chars
+	{Key: "added_on", Title: "Added", MinWidth: 7, MaxWidth: 20, FlexGrow: 0.05, Priority: 7},    // "Added ↑" = 7 chars
 	{Key: "category", Title: "Category", MinWidth: 10, MaxWidth: 20, FlexGrow: 0.1, Priority: 8}, // "Category ↑" = 10 chars
-	{Key: "tags", Title: "Tags", MinWidth: 6, MaxWidth: 25, FlexGrow: 0.1, Priority: 9},       // "Tags ↑" = 6 chars
-	{Key: "tracker", Title: "Tracker", MinWidth: 9, MaxWidth: 25, FlexGrow: 0.1, Priority: 10}, // "Tracker ↑" = 9 chars
+	{Key: "tags", Title: "Tags", MinWidth: 6, MaxWidth: 25, FlexGrow: 0.1, Priority: 9},          // "Tags ↑" = 6 chars
+	{Key: "tracker", Title: "Tracker", MinWidth: 9, MaxWidth: 25, FlexGrow: 0.1, Priority: 10},   // "Tracker ↑" = 9 chars
 }
 
 // Default visible columns
@@ -89,9 +89,9 @@ func NewTorrentList() *TorrentList {
 		showProgress:   true,
 		visibleColumns: append([]string{}, defaultVisibleColumns...), // Copy default columns
 		sortConfig: SortConfig{
-			Column:    "name",    // Default sort by name
-			Direction: SortAsc,   // Ascending
-			Secondary: "size",    // Secondary sort by size
+			Column:    "name",  // Default sort by name
+			Direction: SortAsc, // Ascending
+			Secondary: "size",  // Secondary sort by size
 		},
 	}
 }
@@ -144,7 +144,7 @@ func (t *TorrentList) Update(msg tea.Msg) (*TorrentList, tea.Cmd) {
 			}
 			return t, nil
 		}
-		
+
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
 			t.moveUp()
@@ -154,17 +154,17 @@ func (t *TorrentList) Update(msg tea.Msg) (*TorrentList, tea.Cmd) {
 			t.moveToTop()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("G"))):
 			t.moveToBottom()
-		
+
 		// Column configuration
 		case key.Matches(msg, key.NewBinding(key.WithKeys("C"))):
 			t.showConfig = !t.showConfig
-		
+
 		// Dynamic sorting shortcuts based on visible columns
 		default:
 			// Check if it's a number key for sorting
 			if len(msg.String()) == 1 {
 				char := msg.String()[0]
-				
+
 				// Number keys 1-9 for sorting visible columns
 				if char >= '1' && char <= '9' {
 					index := int(char - '1')
@@ -172,7 +172,7 @@ func (t *TorrentList) Update(msg tea.Msg) (*TorrentList, tea.Cmd) {
 						t.setSortColumn(t.columns[index].Config.Key, false)
 					}
 				}
-				
+
 				// Shift+number (!@#$%^&*() for reverse sorting
 				shiftMap := map[byte]int{
 					'!': 0, '@': 1, '#': 2, '$': 3, '%': 4,
@@ -229,7 +229,7 @@ func (t *TorrentList) View() string {
 
 	// Show column config overlay if enabled
 	if t.showConfig {
-		return t.renderWithColumnConfig(listView)
+		return t.renderWithColumnConfig()
 	}
 
 	return listView
@@ -240,7 +240,7 @@ func (t *TorrentList) renderHeader() string {
 	var headers []string
 	for _, col := range t.columns {
 		title := col.Config.Title
-		
+
 		// Check if this column is currently sorted
 		if col.Config.Key == t.sortConfig.Column {
 			var indicator string
@@ -249,10 +249,10 @@ func (t *TorrentList) renderHeader() string {
 			} else {
 				indicator = " ↓"
 			}
-			
+
 			// Calculate full title with indicator
 			fullTitle := title + indicator
-			
+
 			// If it fits, use it as-is (use rune count for proper Unicode support)
 			if utf8.RuneCountInString(fullTitle) <= col.Width {
 				header := lipgloss.NewStyle().Width(col.Width).Render(fullTitle)
@@ -439,22 +439,22 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			}
 		}
 	}
-	
+
 	// Account for spacing between columns (1 space each)
 	spacing := len(selectedConfigs) - 1
 	if spacing < 0 {
 		spacing = 0
 	}
 	usableWidth := availableWidth - spacing
-	
+
 	// First pass: allocate minimum widths and check what fits
 	var visibleConfigs []ColumnConfig
 	totalMinWidth := 0
-	
+
 	// Sort by priority (1 = highest priority, shown first)
 	sortedConfigs := make([]ColumnConfig, len(selectedConfigs))
 	copy(sortedConfigs, selectedConfigs)
-	
+
 	// Simple sort by priority
 	for i := 0; i < len(sortedConfigs); i++ {
 		for j := i + 1; j < len(sortedConfigs); j++ {
@@ -463,7 +463,7 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			}
 		}
 	}
-	
+
 	// Determine which columns fit
 	for _, config := range sortedConfigs {
 		if totalMinWidth+config.MinWidth <= usableWidth {
@@ -471,29 +471,29 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			totalMinWidth += config.MinWidth
 		}
 	}
-	
+
 	// Second pass: distribute remaining space
 	remainingWidth := usableWidth - totalMinWidth
 	var columns []Column
-	
+
 	// Calculate total flex grow weight
 	totalFlexGrow := 0.0
 	for _, config := range visibleConfigs {
 		totalFlexGrow += config.FlexGrow
 	}
-	
+
 	// Multi-pass allocation to handle max width constraints
 	allocatedWidths := make([]int, len(visibleConfigs))
 	remainingWidthToDistribute := remainingWidth
-	
+
 	// First pass: allocate based on flex grow, respecting max widths
 	for i, config := range visibleConfigs {
 		allocatedWidths[i] = config.MinWidth
-		
+
 		if totalFlexGrow > 0 && remainingWidth > 0 {
 			flexWidth := int(float64(remainingWidth) * (config.FlexGrow / totalFlexGrow))
 			targetWidth := config.MinWidth + flexWidth
-			
+
 			// Respect max width constraints
 			if config.MaxWidth > 0 && targetWidth > config.MaxWidth {
 				allocatedWidths[i] = config.MaxWidth
@@ -505,7 +505,7 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			}
 		}
 	}
-	
+
 	// Second pass: distribute any leftover space to the name column (unlimited growth)
 	if remainingWidthToDistribute > 0 {
 		for i, config := range visibleConfigs {
@@ -515,7 +515,7 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			}
 		}
 	}
-	
+
 	// Create final columns
 	for i, config := range visibleConfigs {
 		columns = append(columns, Column{
@@ -523,7 +523,7 @@ func (t *TorrentList) calculateColumnWidths(availableWidth int) []Column {
 			Width:  allocatedWidths[i],
 		})
 	}
-	
+
 	return columns
 }
 
@@ -555,7 +555,7 @@ func (t *TorrentList) setSortColumn(column string, reverse bool) {
 			t.sortConfig.Direction = SortAsc
 		}
 	}
-	
+
 	t.applySorting()
 }
 
@@ -564,7 +564,7 @@ func (t *TorrentList) applySorting() {
 	if len(t.torrents) <= 1 {
 		return
 	}
-	
+
 	sort.Slice(t.torrents, func(i, j int) bool {
 		return t.compareTorrents(t.torrents[i], t.torrents[j])
 	})
@@ -573,17 +573,17 @@ func (t *TorrentList) applySorting() {
 // compareTorrents compares two torrents based on current sort configuration
 func (t *TorrentList) compareTorrents(a, b api.Torrent) bool {
 	result := t.compareByColumn(a, b, t.sortConfig.Column)
-	
+
 	// If primary comparison is equal, use secondary sort
 	if result == 0 && t.sortConfig.Secondary != "" && t.sortConfig.Secondary != t.sortConfig.Column {
 		result = t.compareByColumn(a, b, t.sortConfig.Secondary)
 	}
-	
+
 	// If still equal, fall back to name for consistency
 	if result == 0 {
 		result = strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	}
-	
+
 	// Apply sort direction
 	if t.sortConfig.Direction == SortDesc {
 		return result > 0
@@ -685,34 +685,34 @@ func (t *TorrentList) SetSortConfig(config SortConfig) {
 }
 
 // renderWithColumnConfig renders the torrent list with column configuration overlay
-func (t *TorrentList) renderWithColumnConfig(listView string) string {
+func (t *TorrentList) renderWithColumnConfig() string {
 	// Calculate layout - use most of the terminal space
-	contentWidth := t.width - 4  // Leave some margin
+	contentWidth := t.width - 4 // Leave some margin
 	if contentWidth > 100 {
-		contentWidth = 100  // Cap max width for readability
+		contentWidth = 100 // Cap max width for readability
 	}
 	contentHeight := t.height - 4
-	
+
 	// Build the overlay content
 	var content strings.Builder
-	
+
 	// Title
 	title := "Column Configuration"
 	titleStyle := styles.TitleStyle.Bold(true).Underline(true)
 	content.WriteString(lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center, titleStyle.Render(title)))
 	content.WriteString("\n\n")
-	
+
 	// Instructions
-	content.WriteString(lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center, 
+	content.WriteString(lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center,
 		styles.DimStyle.Render("Toggle column visibility: 1-9, 0, q, w, e, r")))
 	content.WriteString("\n\n")
-	
+
 	// Two-column layout for the column list
 	halfWidth := (contentWidth - 4) / 2
 	var leftCol, rightCol strings.Builder
-	
+
 	halfPoint := (len(allColumns) + 1) / 2
-	
+
 	// Left column
 	for i := 0; i < halfPoint && i < len(allColumns); i++ {
 		config := allColumns[i]
@@ -723,20 +723,20 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 				break
 			}
 		}
-		
+
 		checkbox := "[ ]"
 		checkStyle := styles.DimStyle
 		if isVisible {
 			checkbox = "[✓]"
 			checkStyle = styles.AccentStyle
 		}
-		
+
 		// Format with proper spacing
 		var num string
 		if i < 9 {
 			num = fmt.Sprintf("%d.", i+1)
 		} else if i == 9 {
-			num = "0."  // Use 0 for 10th item
+			num = "0." // Use 0 for 10th item
 		} else {
 			// Use q, w, e, r for columns 11-14 to avoid conflicts
 			extraKeys := []string{"q", "w", "e", "r"}
@@ -747,7 +747,7 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 			}
 		}
 		line := fmt.Sprintf("%-3s %s %-15s", num, checkStyle.Render(checkbox), config.Title)
-		
+
 		if isVisible {
 			line = styles.TextStyle.Render(line)
 		} else {
@@ -756,7 +756,7 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 		leftCol.WriteString(line)
 		leftCol.WriteString("\n")
 	}
-	
+
 	// Right column
 	for i := halfPoint; i < len(allColumns); i++ {
 		config := allColumns[i]
@@ -767,14 +767,14 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 				break
 			}
 		}
-		
+
 		checkbox := "[ ]"
 		checkStyle := styles.DimStyle
 		if isVisible {
 			checkbox = "[✓]"
 			checkStyle = styles.AccentStyle
 		}
-		
+
 		// Format with proper spacing - handle numbers > 9
 		var num string
 		if i < 9 {
@@ -791,7 +791,7 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 			}
 		}
 		line := fmt.Sprintf("%-3s %s %-15s", num, checkStyle.Render(checkbox), config.Title)
-		
+
 		if isVisible {
 			line = styles.TextStyle.Render(line)
 		} else {
@@ -800,13 +800,13 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 		rightCol.WriteString(line)
 		rightCol.WriteString("\n")
 	}
-	
+
 	// Combine columns
 	leftColStr := leftCol.String()
 	rightColStr := rightCol.String()
 	leftLines := strings.Split(leftColStr, "\n")
 	rightLines := strings.Split(rightColStr, "\n")
-	
+
 	for i := 0; i < len(leftLines) || i < len(rightLines); i++ {
 		left := ""
 		right := ""
@@ -816,30 +816,30 @@ func (t *TorrentList) renderWithColumnConfig(listView string) string {
 		if i < len(rightLines) {
 			right = rightLines[i]
 		}
-		
+
 		if left != "" || right != "" {
 			content.WriteString(fmt.Sprintf("  %-*s    %s\n", halfWidth, left, right))
 		}
 	}
-	
+
 	// Footer
 	content.WriteString("\n")
 	content.WriteString(lipgloss.PlaceHorizontal(contentWidth, lipgloss.Center,
 		styles.DimStyle.Render("Press 'C' or 'Esc' to close")))
-	
+
 	// Create the box
 	box := styles.FocusedPanelStyle.
 		Width(contentWidth).
 		Height(contentHeight).
 		Render(content.String())
-	
+
 	// Place the box in the center
-	finalView := lipgloss.Place(t.width, t.height, 
+	finalView := lipgloss.Place(t.width, t.height,
 		lipgloss.Center, lipgloss.Top,
 		box,
 		lipgloss.WithWhitespaceChars(" "),
 		lipgloss.WithWhitespaceForeground(lipgloss.Color("#1a1a1a")))
-	
+
 	return finalView
 }
 
@@ -848,9 +848,9 @@ func (t *TorrentList) ToggleColumn(index int) {
 	if index < 0 || index >= len(allColumns) {
 		return
 	}
-	
+
 	columnKey := allColumns[index].Key
-	
+
 	// Check if column is currently visible
 	found := -1
 	for i, key := range t.visibleColumns {
@@ -859,7 +859,7 @@ func (t *TorrentList) ToggleColumn(index int) {
 			break
 		}
 	}
-	
+
 	if found >= 0 {
 		// Remove column
 		t.visibleColumns = append(t.visibleColumns[:found], t.visibleColumns[found+1:]...)
@@ -867,7 +867,7 @@ func (t *TorrentList) ToggleColumn(index int) {
 		// Add column
 		t.visibleColumns = append(t.visibleColumns, columnKey)
 	}
-	
+
 	// Recalculate column widths
 	t.columns = t.calculateColumnWidths(t.width)
 }

@@ -325,8 +325,8 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Enter):
 			if m.viewMode == ViewModeMain {
-				// If filter panel is in input mode, let it handle enter
-				if m.filterPanel.IsInInputMode() {
+				// If filter panel is in any interactive mode, let it handle enter
+				if m.filterPanel.IsInInteractiveMode() {
 					oldFilter := m.filterPanel.GetFilter()
 					m.filterPanel, cmd = m.filterPanel.Update(msg)
 					cmds = append(cmds, cmd)

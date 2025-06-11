@@ -163,17 +163,17 @@ func TestFilterPanel_InteractiveMode(t *testing.T) {
 
 func TestFilterPanel_ResponsiveLayout(t *testing.T) {
 	fp := NewFilterPanel()
-	
+
 	// Test different widths
 	testWidths := []int{0, 80, 120, 200, 300}
-	
+
 	for _, width := range testWidths {
 		fp.SetDimensions(width, 3)
-		
+
 		// Test normal mode rendering
 		view := fp.View()
 		assert.NotEmpty(t, view, "Empty view for width %d", width)
-		
+
 		// Verify view content makes sense
 		if width == 0 {
 			// Should use fallback layout
@@ -181,30 +181,30 @@ func TestFilterPanel_ResponsiveLayout(t *testing.T) {
 		} else {
 			// Should use responsive layout
 			assert.Contains(t, view, "No active filters")
-			
+
 			// Check that content doesn't obviously overflow
 			lines := strings.Split(view, "\n")
 			for _, line := range lines {
 				cleanLine := stripANSI(line)
 				// Allow some reasonable tolerance for styling
 				if len(cleanLine) > width+20 {
-					t.Errorf("Line length %d significantly exceeds width %d for line: %q", 
+					t.Errorf("Line length %d significantly exceeds width %d for line: %q",
 						len(cleanLine), width, cleanLine)
 				}
 			}
 		}
 	}
-	
+
 	// Test with active filters for more complex layout
 	fp.filter.Search = "test"
 	fp.filter.States = []string{"downloading", "uploading"}
 	fp.filter.Category = "movies"
-	
+
 	for _, width := range testWidths {
 		fp.SetDimensions(width, 3)
 		view := fp.View()
 		assert.NotEmpty(t, view)
-		
+
 		// Should contain filter information
 		if width > 50 {
 			assert.Contains(t, view, "Active")
@@ -215,33 +215,33 @@ func TestFilterPanel_ResponsiveLayout(t *testing.T) {
 
 func TestFilterPanel_ResponsiveFilterOptions(t *testing.T) {
 	fp := NewFilterPanel()
-	
+
 	// Set up some available states for testing
 	fp.availableStates = []string{
-		"active", "downloading", "uploading", "completed", 
+		"active", "downloading", "uploading", "completed",
 		"paused", "queued", "stalled", "checking", "error",
 	}
-	
+
 	// Test different widths and their visible option counts
 	testCases := []struct {
 		width    int
 		expected int
 	}{
-		{0, 3},    // No width set, use minimum
-		{50, 3},   // Narrow, use minimum (< 120)
-		{100, 3},  // Still narrow (< 120)
-		{150, 4},  // Medium (120-159)
-		{180, 5},  // Wide (160-199)
-		{200, 6},  // Very wide (>= 200)
-		{300, 6},  // Extra wide, still capped at maximum
+		{0, 3},   // No width set, use minimum
+		{50, 3},  // Narrow, use minimum (< 120)
+		{100, 3}, // Still narrow (< 120)
+		{150, 4}, // Medium (120-159)
+		{180, 5}, // Wide (160-199)
+		{200, 6}, // Very wide (>= 200)
+		{300, 6}, // Extra wide, still capped at maximum
 	}
-	
+
 	for _, tc := range testCases {
 		fp.SetDimensions(tc.width, 5)
 		maxVisible := fp.calculateMaxVisibleOptions()
-		
+
 		if maxVisible != tc.expected {
-			t.Errorf("Width %d: expected %d visible options, got %d", 
+			t.Errorf("Width %d: expected %d visible options, got %d",
 				tc.width, tc.expected, maxVisible)
 		}
 	}

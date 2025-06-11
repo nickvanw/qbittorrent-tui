@@ -109,14 +109,32 @@ func init() {
 	rootCmd.Flags().StringVarP(&theme, "theme", "t", "default", "UI theme (default: default)")
 
 	// Bind flags to viper
-	viper.BindPFlag("server.url", rootCmd.Flags().Lookup("url"))
-	viper.BindPFlag("server.username", rootCmd.Flags().Lookup("username"))
-	viper.BindPFlag("server.password", rootCmd.Flags().Lookup("password"))
-	viper.BindPFlag("ui.refresh_interval", rootCmd.Flags().Lookup("refresh"))
-	viper.BindPFlag("ui.theme", rootCmd.Flags().Lookup("theme"))
+	if err := viper.BindPFlag("server.url", rootCmd.Flags().Lookup("url")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding server.url flag: %v\n", err)
+		os.Exit(1)
+	}
+	if err := viper.BindPFlag("server.username", rootCmd.Flags().Lookup("username")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding server.username flag: %v\n", err)
+		os.Exit(1)
+	}
+	if err := viper.BindPFlag("server.password", rootCmd.Flags().Lookup("password")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding server.password flag: %v\n", err)
+		os.Exit(1)
+	}
+	if err := viper.BindPFlag("ui.refresh_interval", rootCmd.Flags().Lookup("refresh")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding ui.refresh_interval flag: %v\n", err)
+		os.Exit(1)
+	}
+	if err := viper.BindPFlag("ui.theme", rootCmd.Flags().Lookup("theme")); err != nil {
+		fmt.Fprintf(os.Stderr, "Error binding ui.theme flag: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Mark required flags
-	rootCmd.MarkFlagRequired("url")
+	if err := rootCmd.MarkFlagRequired("url"); err != nil {
+		fmt.Fprintf(os.Stderr, "Error marking url flag as required: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func initConfig() {

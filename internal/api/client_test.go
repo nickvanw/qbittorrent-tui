@@ -46,7 +46,7 @@ func TestLoginWithActualServer(t *testing.T) {
 		"-d", "username=admin",
 		"-d", "password="+password)
 
-	output, err := cmd.CombinedOutput()
+	output, _ := cmd.CombinedOutput()
 	t.Logf("Curl output:\n%s", string(output))
 
 	// Now test with our client

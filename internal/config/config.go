@@ -37,11 +37,21 @@ func Load() (*Config, error) {
 	viper.SetDefault("ui.theme", "default")
 
 	// Bind env vars to config struct
-	viper.BindEnv("server.url")
-	viper.BindEnv("server.username")
-	viper.BindEnv("server.password")
-	viper.BindEnv("ui.refresh_interval")
-	viper.BindEnv("ui.theme")
+	if err := viper.BindEnv("server.url"); err != nil {
+		return nil, fmt.Errorf("failed to bind server.url env: %w", err)
+	}
+	if err := viper.BindEnv("server.username"); err != nil {
+		return nil, fmt.Errorf("failed to bind server.username env: %w", err)
+	}
+	if err := viper.BindEnv("server.password"); err != nil {
+		return nil, fmt.Errorf("failed to bind server.password env: %w", err)
+	}
+	if err := viper.BindEnv("ui.refresh_interval"); err != nil {
+		return nil, fmt.Errorf("failed to bind ui.refresh_interval env: %w", err)
+	}
+	if err := viper.BindEnv("ui.theme"); err != nil {
+		return nil, fmt.Errorf("failed to bind ui.theme env: %w", err)
+	}
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

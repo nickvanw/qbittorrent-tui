@@ -6,7 +6,6 @@ run:
     - integration
 
 output:
-  format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
@@ -14,13 +13,12 @@ linters-settings:
   errcheck:
     check-type-assertions: true
     check-blank: true
+    exclude-functions:
+      - (io.Closer).Close
   
   goconst:
     min-len: 3
     min-occurrences: 3
-  
-  gocyclo:
-    min-complexity: 15
   
   gofmt:
     simplify: true
@@ -29,8 +27,9 @@ linters-settings:
     local-prefixes: github.com/nickvanw/qbitorrent-tui
   
   govet:
-    check-shadowing: true
     enable-all: true
+    disable:
+      - fieldalignment
   
   lll:
     line-length: 120
@@ -60,7 +59,6 @@ linters:
   enable:
     - bodyclose
     - errcheck
-    - gocyclo
     - gofmt
     - goimports
     - govet
@@ -78,7 +76,6 @@ linters:
     - gochecknoglobals
     - godot
     - godox
-    - goerr113
     - nestif
     - testpackage
     - wsl

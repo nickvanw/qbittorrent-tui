@@ -1,5 +1,9 @@
 .PHONY: help test test-unit test-integration test-coverage clean lint fmt build run validate
 
+GOBIN := $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)
+GOLANGCI_LINT := $(GOBIN)/golangci-lint
+GOIMPORTS := $(GOBIN)/goimports
+
 # Default target shows help
 help:
 	@echo "qBittorrent TUI - Development Commands"
@@ -73,11 +77,11 @@ fmt:
 # Run linters
 lint:
 	@echo "🔍 Running linters..."
-	@if ! command -v golangci-lint &> /dev/null; then \
+	@if [ ! -f $(GOLANGCI_LINT) ]; then \
 		echo "❌ golangci-lint not found. Run 'make install-tools' first."; \
 		exit 1; \
 	fi
-	@golangci-lint run
+	@$(GOLANGCI_LINT) run
 
 # Install development tools
 install-tools:

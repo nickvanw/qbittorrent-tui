@@ -26,6 +26,7 @@ const (
 // FilterPanel handles torrent filtering
 type FilterPanel struct {
 	filter      filter.Filter
+	backupFilter filter.Filter // Backup for cancel operation
 	mode        FilterMode
 	searchInput textinput.Model
 	width       int
@@ -99,6 +100,8 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 		case FilterModeSearch:
 			switch msg.String() {
 			case "esc":
+				// Esc cancels search and restores previous value
+				f.searchInput.SetValue(f.backupFilter.Search)
 				f.mode = FilterModeNone
 				f.searchInput.Blur()
 			case "enter":
@@ -112,13 +115,19 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 		case FilterModeState, FilterModeCategory, FilterModeTracker, FilterModeTag:
 			switch msg.String() {
 			case "esc":
+				// Esc cancels and restores previous filter state
+				f.filter = f.backupFilter
 				f.mode = FilterModeNone
 				f.cursor = 0
 			case "up", "k":
 				f.moveCursorUp()
 			case "down", "j":
 				f.moveCursorDown()
-			case "enter", " ":
+			case "enter":
+				// Enter exits interactive mode (marking as "done")
+				f.mode = FilterModeNone
+				f.cursor = 0
+			case " ":
 				f.toggleSelection()
 			case "a":
 				f.selectAll()
@@ -129,19 +138,25 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 		case FilterModeNone:
 			switch msg.String() {
 			case "/", "f":
+				f.backupFilter = f.filter
+				f.searchInput.SetValue(f.filter.Search)
 				f.mode = FilterModeSearch
 				f.searchInput.Focus()
 				cmd = textinput.Blink
 			case "s":
+				f.backupFilter = f.filter
 				f.mode = FilterModeState
 				f.cursor = 0
 			case "c":
+				f.backupFilter = f.filter
 				f.mode = FilterModeCategory
 				f.cursor = 0
 			case "t":
+				f.backupFilter = f.filter
 				f.mode = FilterModeTracker
 				f.cursor = 0
 			case "a":
+				f.backupFilter = f.filter
 				f.mode = FilterModeTag
 				f.cursor = 0
 			case "x":
@@ -213,19 +228,19 @@ func (f *FilterPanel) renderNormalMode() string {
 
 	// Help text
 	help := styles.DimStyle.Render("Press: / search • s state • c category • t tracker • a tag • x clear")
-	
+
 	// Calculate space usage
 	filterLen := lipgloss.Width(filterSection)
 	helpLen := lipgloss.Width(help)
 	spacing := 3 // minimum spacing between sections
 
 	// If both fit comfortably on one line, use horizontal layout
-	if filterLen + helpLen + spacing <= availableWidth {
+	if filterLen+helpLen+spacing <= availableWidth {
 		paddingNeeded := availableWidth - filterLen - helpLen
 		if paddingNeeded < spacing {
 			paddingNeeded = spacing
 		}
-		
+
 		padding := strings.Repeat(" ", paddingNeeded)
 		return filterSection + padding + help
 	}
@@ -235,7 +250,7 @@ func (f *FilterPanel) renderNormalMode() string {
 		// Calculate how much space to give each section
 		totalContent := filterLen + helpLen
 		extraSpace := availableWidth - totalContent - spacing
-		
+
 		if extraSpace > 20 { // If we have significant extra space
 			// Add padding in the middle
 			midPadding := spacing + (extraSpace / 2)
@@ -286,7 +301,7 @@ func (f *FilterPanel) renderSimpleNormalMode() string {
 func (f *FilterPanel) renderSearchMode() string {
 	title := styles.TitleStyle.Render("Search:")
 	input := f.searchInput.View()
-	help := styles.DimStyle.Render("Press Enter to apply, Esc to cancel")
+	help := styles.DimStyle.Render("Enter save • Esc cancel")
 
 	return fmt.Sprintf("%s %s  %s", title, input, help)
 }
@@ -302,7 +317,7 @@ func (f *FilterPanel) renderListMode(title string, options []string, selected []
 
 	// Calculate how many options we can show based on terminal width
 	maxVisible := f.calculateMaxVisibleOptions()
-	
+
 	// Show options with selection state
 	visibleOptions := options
 	if len(options) > maxVisible {
@@ -339,7 +354,7 @@ func (f *FilterPanel) renderListMode(title string, options []string, selected []
 		}
 	}
 
-	help := styles.DimStyle.Render("↑↓ navigate • Space toggle • a all • n none • Enter done • Esc cancel")
+	help := styles.DimStyle.Render("↑↓ navigate • Space toggle • a all • n none • Enter save • Esc cancel")
 	parts = append(parts, help)
 
 	return strings.Join(parts, " ")
@@ -350,23 +365,23 @@ func (f *FilterPanel) calculateMaxVisibleOptions() int {
 	// Default minimum and maximum
 	minVisible := 3
 	maxVisible := 6
-	
+
 	// If width is not set, use minimum
 	if f.width == 0 {
 		return minVisible
 	}
-	
+
 	// Use a simpler, more generous calculation based on width ranges
 	// This gives users more visible options on wider terminals
-	
+
 	if f.width < 120 {
-		return minVisible  // 3 options on narrow screens
+		return minVisible // 3 options on narrow screens
 	} else if f.width < 160 {
-		return 4  // 4 options on medium screens
+		return 4 // 4 options on medium screens
 	} else if f.width < 200 {
-		return 5  // 5 options on wide screens
+		return 5 // 5 options on wide screens
 	} else {
-		return maxVisible  // 6 options on very wide screens
+		return maxVisible // 6 options on very wide screens
 	}
 }
 

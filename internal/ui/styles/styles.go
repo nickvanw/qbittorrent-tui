@@ -32,7 +32,7 @@ var (
 			BorderForeground(DimTextColor).
 			Padding(1, 2)
 
-	FocusedPanelStyle = PanelStyle.Copy().
+	FocusedPanelStyle = PanelStyle.
 				BorderForeground(PrimaryColor)
 
 	// Text styles
@@ -45,7 +45,7 @@ var (
 
 	DimStyle = lipgloss.NewStyle().
 			Foreground(DimTextColor)
-	
+
 	TextStyle = lipgloss.NewStyle().
 			Foreground(TextColor)
 
@@ -99,7 +99,7 @@ var (
 			BorderForeground(DimTextColor).
 			Padding(0, 1)
 
-	FocusedInputStyle = InputStyle.Copy().
+	FocusedInputStyle = InputStyle.
 				BorderForeground(PrimaryColor)
 
 	// Help styles
@@ -158,7 +158,7 @@ func TruncateString(s string, maxLen int) string {
 		}
 		return string(runes[:maxLen])
 	}
-	
+
 	// Truncate and add ellipsis
 	runes := []rune(s)
 	if len(runes) <= maxLen-3 {
@@ -202,17 +202,17 @@ func FormatTime(timestamp int64) string {
 	}
 	t := time.Unix(timestamp, 0)
 	now := time.Now()
-	
+
 	// If today, show time only
 	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
 		return t.Format("15:04")
 	}
-	
+
 	// If this year, show month and day
 	if t.Year() == now.Year() {
 		return t.Format("Jan 02")
 	}
-	
+
 	// Otherwise show full date
 	return t.Format("2006-01-02")
 }
