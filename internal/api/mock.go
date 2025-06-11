@@ -13,6 +13,9 @@ type MockClient struct {
 	TorrentProperties map[string]*TorrentProperties
 	Categories        map[string]interface{}
 	Tags              []string
+	Trackers          map[string][]Tracker
+	Peers             map[string]map[string]Peer
+	Files             map[string][]TorrentFile
 	LoginError        error
 	GetError          error
 	LoggedIn          bool
@@ -25,6 +28,9 @@ func NewMockClient() *MockClient {
 		TorrentProperties: make(map[string]*TorrentProperties),
 		Categories:        make(map[string]interface{}),
 		Tags:              []string{},
+		Trackers:          make(map[string][]Tracker),
+		Peers:             make(map[string]map[string]Peer),
+		Files:             make(map[string][]TorrentFile),
 		GlobalStats: &GlobalStats{
 			DlInfoSpeed:      1024 * 1024,
 			UpInfoSpeed:      512 * 1024,
@@ -103,6 +109,95 @@ func (m *MockClient) GetTags(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("authentication required")
 	}
 	return m.Tags, nil
+}
+
+func (m *MockClient) GetTorrentTrackers(ctx context.Context, hash string) ([]Tracker, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+	if trackers, exists := m.Trackers[hash]; exists {
+		return trackers, nil
+	}
+	// Return mock data if no specific data is set
+	return []Tracker{
+		{
+			URL:           "http://tracker.example.com:8080/announce",
+			Status:        2, // Working
+			Tier:          0,
+			NumPeers:      42,
+			NumSeeds:      15,
+			NumLeeches:    27,
+			NumDownloaded: 125,
+			Msg:           "Working",
+		},
+	}, nil
+}
+
+func (m *MockClient) GetTorrentPeers(ctx context.Context, hash string) (map[string]Peer, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+	if peers, exists := m.Peers[hash]; exists {
+		return peers, nil
+	}
+	// Return mock data if no specific data is set
+	return map[string]Peer{
+		"192.168.1.100:51413": {
+			IP:         "192.168.1.100",
+			Port:       51413,
+			Country:    "US",
+			Connection: "uTP",
+			Flags:      "u D",
+			Client:     "qBittorrent/4.5.0",
+			Progress:   0.75,
+			DlSpeed:    1024 * 100,
+			UpSpeed:    1024 * 50,
+			Downloaded: 1024 * 1024 * 500,
+			Uploaded:   1024 * 1024 * 200,
+			Relevance:  1.0,
+		},
+	}, nil
+}
+
+func (m *MockClient) GetTorrentFiles(ctx context.Context, hash string) ([]TorrentFile, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+	if files, exists := m.Files[hash]; exists {
+		return files, nil
+	}
+	// Return mock data if no specific data is set
+	return []TorrentFile{
+		{
+			Index:        0,
+			Name:         "ubuntu-22.04.3-desktop-amd64.iso",
+			Size:         4800000000, // ~4.8GB
+			Progress:     0.85,
+			Priority:     1, // Normal priority
+			IsSeed:       false,
+			PieceRange:   []int{0, 1199},
+			Availability: 0.95,
+		},
+		{
+			Index:        1,
+			Name:         "README.txt",
+			Size:         2048,
+			Progress:     1.0,
+			Priority:     1,
+			IsSeed:       true,
+			PieceRange:   []int{1200, 1200},
+			Availability: 1.0,
+		},
+	}, nil
 }
 
 // GenerateMockTorrents creates a slice of mock torrents for testing

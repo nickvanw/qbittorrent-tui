@@ -39,7 +39,7 @@ type (
 // MainView is the main application view
 type MainView struct {
 	config    *config.Config
-	apiClient *api.Client
+	apiClient api.ClientInterface
 
 	// UI components
 	torrentList    *components.TorrentList
@@ -134,33 +134,18 @@ func DefaultKeyMap() KeyMap {
 }
 
 // NewMainView creates a new main view
-func NewMainView(cfg *config.Config) *MainView {
+func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 	return &MainView{
 		config:         cfg,
+		apiClient:      client,
 		torrentList:    components.NewTorrentList(),
 		statsPanel:     components.NewStatsPanel(),
 		filterPanel:    components.NewFilterPanel(),
-		torrentDetails: components.NewTorrentDetails(),
+		torrentDetails: components.NewTorrentDetails(client),
 		help:           help.New(),
 		keys:           DefaultKeyMap(),
 		viewMode:       ViewModeMain,
 	}
-}
-
-// ConnectAPI initializes the API client and authenticates
-func (m *MainView) ConnectAPI() error {
-	client, err := api.NewClient(m.config.Server.URL)
-	if err != nil {
-		return err
-	}
-
-	err = client.Login(m.config.Server.Username, m.config.Server.Password)
-	if err != nil {
-		return err
-	}
-
-	m.apiClient = client
-	return nil
 }
 
 // Init initializes the view
@@ -282,6 +267,11 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastError = error(msg)
 		m.isLoading = false
 
+	case components.DetailsDataMsg:
+		// Pass details data to torrent details component
+		m.torrentDetails, cmd = m.torrentDetails.Update(msg)
+		cmds = append(cmds, cmd)
+
 	case tickMsg:
 		// Refresh data periodically
 		cmds = append(cmds, m.fetchAllData(), m.tickCmd())
@@ -340,7 +330,8 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if selectedHash != "" {
 						for _, torrent := range m.torrents {
 							if torrent.Hash == selectedHash {
-								m.torrentDetails.SetTorrent(&torrent)
+								cmd = m.torrentDetails.SetTorrent(&torrent)
+								cmds = append(cmds, cmd)
 								m.viewMode = ViewModeDetails
 								break
 							}
@@ -544,7 +535,7 @@ func (m *MainView) updateDimensions() {
 	if m.viewMode == ViewModeDetails {
 		helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
 		contentHeight := m.height - helpHeight - 1
-		m.torrentDetails.SetDimensions(m.width-4, contentHeight-4)
+		m.torrentDetails.SetSize(m.width-4, contentHeight-4)
 	}
 }
 
@@ -632,7 +623,7 @@ func (m *MainView) renderDetailsView() string {
 	contentHeight := m.height - helpHeight - 1
 
 	// Set dimensions for the details component
-	m.torrentDetails.SetDimensions(m.width-4, contentHeight-4) // Account for panel borders
+	m.torrentDetails.SetSize(m.width-4, contentHeight-4) // Account for panel borders
 
 	// Render the details in a panel
 	content := m.torrentDetails.View()

@@ -25,12 +25,12 @@ const (
 
 // FilterPanel handles torrent filtering
 type FilterPanel struct {
-	filter      filter.Filter
+	filter       filter.Filter
 	backupFilter filter.Filter // Backup for cancel operation
-	mode        FilterMode
-	searchInput textinput.Model
-	width       int
-	height      int
+	mode         FilterMode
+	searchInput  textinput.Model
+	width        int
+	height       int
 
 	// Available options for selection
 	availableStates     []string

@@ -99,6 +99,47 @@ type TorrentProperties struct {
 	UpSpeed                int64   `json:"up_speed"`
 }
 
+// Tracker represents a torrent tracker
+type Tracker struct {
+	URL           string `json:"url"`
+	Status        int    `json:"status"`
+	Tier          int    `json:"tier"`
+	NumPeers      int    `json:"num_peers"`
+	NumSeeds      int    `json:"num_seeds"`
+	NumLeeches    int    `json:"num_leeches"`
+	NumDownloaded int    `json:"num_downloaded"`
+	Msg           string `json:"msg"`
+}
+
+// Peer represents a torrent peer
+type Peer struct {
+	IP          string  `json:"ip"`
+	Port        int     `json:"port"`
+	Country     string  `json:"country"`
+	Connection  string  `json:"connection"`
+	Flags       string  `json:"flags"`
+	Client      string  `json:"client"`
+	Progress    float64 `json:"progress"`
+	DlSpeed     int64   `json:"dl_speed"`
+	UpSpeed     int64   `json:"up_speed"`
+	Downloaded  int64   `json:"downloaded"`
+	Uploaded    int64   `json:"uploaded"`
+	Relevance   float64 `json:"relevance"`
+	FilesString string  `json:"files"`
+}
+
+// TorrentFile represents a file within a torrent
+type TorrentFile struct {
+	Index        int     `json:"index"`
+	Name         string  `json:"name"`
+	Size         int64   `json:"size"`
+	Progress     float64 `json:"progress"`
+	Priority     int     `json:"priority"`
+	IsSeed       bool    `json:"is_seed"`
+	PieceRange   []int   `json:"piece_range"`
+	Availability float64 `json:"availability"`
+}
+
 type TorrentState string
 
 const (

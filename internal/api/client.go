@@ -149,6 +149,42 @@ func (c *Client) GetTags(ctx context.Context) ([]string, error) {
 	return tags, nil
 }
 
+// GetTorrentTrackers retrieves trackers for a specific torrent
+func (c *Client) GetTorrentTrackers(ctx context.Context, hash string) ([]Tracker, error) {
+	endpoint := fmt.Sprintf("/api/v2/torrents/trackers?hash=%s", hash)
+	var trackers []Tracker
+	if err := c.get(ctx, endpoint, &trackers); err != nil {
+		return nil, fmt.Errorf("failed to get torrent trackers: %w", err)
+	}
+	return trackers, nil
+}
+
+// GetTorrentPeers retrieves peers for a specific torrent
+func (c *Client) GetTorrentPeers(ctx context.Context, hash string) (map[string]Peer, error) {
+	endpoint := fmt.Sprintf("/api/v2/sync/torrentPeers?hash=%s", hash)
+
+	// The API returns a complex object, we need to extract the peers map
+	var response struct {
+		Peers map[string]Peer `json:"peers"`
+	}
+
+	if err := c.get(ctx, endpoint, &response); err != nil {
+		return nil, fmt.Errorf("failed to get torrent peers: %w", err)
+	}
+
+	return response.Peers, nil
+}
+
+// GetTorrentFiles retrieves files for a specific torrent
+func (c *Client) GetTorrentFiles(ctx context.Context, hash string) ([]TorrentFile, error) {
+	endpoint := fmt.Sprintf("/api/v2/torrents/files?hash=%s", hash)
+	var files []TorrentFile
+	if err := c.get(ctx, endpoint, &files); err != nil {
+		return nil, fmt.Errorf("failed to get torrent files: %w", err)
+	}
+	return files, nil
+}
+
 func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {

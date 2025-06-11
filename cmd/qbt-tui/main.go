@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/views"
 )
@@ -150,13 +151,18 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Initialize the main view
-	model := views.NewMainView(cfg)
+	// Create and connect API client
+	client, err := api.NewClient(cfg.Server.URL)
+	if err != nil {
+		return fmt.Errorf("failed to create API client: %w", err)
+	}
 
-	// Connect to the API
-	if err := model.ConnectAPI(); err != nil {
+	if err := client.Login(cfg.Server.Username, cfg.Server.Password); err != nil {
 		return fmt.Errorf("failed to connect to qBittorrent API: %w", err)
 	}
+
+	// Initialize the main view with the API client
+	model := views.NewMainView(cfg, client)
 
 	// Create the program
 	p := tea.NewProgram(model, tea.WithAltScreen())
