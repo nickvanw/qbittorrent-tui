@@ -1,0 +1,116 @@
+project_name: qbt-tui
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - main: ./cmd/qbt-tui
+    id: qbt-tui
+    binary: qbt-tui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - merge conflict
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+
+release:
+  github:
+    owner: nickvanw
+    name: qbitorrent-tui
+  draft: false
+  prerelease: auto
+  name_template: "Release {{ .Tag }}"
+  footer: |
+    ## Installation
+    
+    Download the appropriate binary for your platform from the assets below.
+    
+    ### Linux/macOS
+    ```bash
+    # Extract and install (adjust filename for your platform)
+    tar -xzf qbt-tui_*_linux_amd64.tar.gz
+    sudo mv qbt-tui /usr/local/bin/
+    ```
+    
+    ### Windows
+    Extract the ZIP file and place `qbt-tui.exe` in your PATH.
+    
+    ## Usage
+    ```bash
+    qbt-tui --url http://localhost:8080 --username admin --password yourpass
+    ```
+
+brews:
+  - name: qbt-tui
+    repository:
+      owner: nickvanw
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://github.com/nickvanw/qbitorrent-tui
+    description: "Terminal UI for qBittorrent"
+    license: MIT
+    test: |
+      system "#{bin}/qbt-tui --help"
+
+nfpms:
+  - id: packages
+    package_name: qbt-tui
+    vendor: nickvanw
+    homepage: https://github.com/nickvanw/qbitorrent-tui
+    maintainer: Nick Van Wiggeren <nick@nickvanw.com>
+    description: |-
+      Terminal UI for qBittorrent
+      A fully-featured Terminal UI for qBittorrent with responsive layout,
+      dynamic sorting, and configurable columns.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    contents:
+      - src: ./README.md
+        dst: /usr/share/doc/qbt-tui/README.md
+      - src: ./config.example.toml
+        dst: /usr/share/doc/qbt-tui/config.example.toml
