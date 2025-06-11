@@ -1,10 +1,5 @@
 # qBittorrent TUI
 
-[![CI](https://github.com/nickvanw/qbitorrent-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/nickvanw/qbitorrent-tui/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/nickvanw/qbitorrent-tui/actions/workflows/codeql.yml/badge.svg)](https://github.com/nickvanw/qbitorrent-tui/actions/workflows/codeql.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nickvanw/qbitorrent-tui)](https://goreportcard.com/report/github.com/nickvanw/qbitorrent-tui)
-[![Release](https://img.shields.io/github/release/nickvanw/qbitorrent-tui.svg)](https://github.com/nickvanw/qbitorrent-tui/releases)
-
 A terminal-based user interface for monitoring and managing qBittorrent. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ![qBittorrent TUI Demo](demo.gif)

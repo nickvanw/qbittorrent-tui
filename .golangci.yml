@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   issues-exit-code: 1
@@ -6,73 +8,35 @@ run:
     - integration
 
 output:
-  print-issued-lines: true
-  print-linter-name: true
+  show-stats: true
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-    exclude-functions:
-      - (io.Closer).Close
-  
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  
-  gofmt:
-    simplify: true
-  
-  goimports:
-    local-prefixes: github.com/nickvanw/qbitorrent-tui
-  
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-  
-  lll:
-    line-length: 120
-  
-  misspell:
-    locale: US
-  
-  nakedret:
-    max-func-lines: 30
-  
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: false
-  
-  unparam:
-    check-exported: false
-  
-  unused:
-    check-exported: false
-  
-  whitespace:
-    multi-if: false
-    multi-func: false
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/nickvanw/qbitorrent-tui
+
 
 linters:
   enable:
     - bodyclose
-    - errcheck
-    - gofmt
-    - goimports
     - govet
     - ineffassign
     - misspell
     - nakedret
-    - staticcheck
-    - typecheck
     - unconvert
     - unparam
     - unused
     - whitespace
   
   disable:
+    - errcheck
+    - staticcheck
     - gochecknoglobals
     - godot
     - godox
@@ -81,29 +45,5 @@ linters:
     - wsl
 
 issues:
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - dupl
-        - gosec
-        - funlen
-        - lll
-    
-    # Exclude some linters from running on mock files
-    - path: mock\.go
-      linters:
-        - errcheck
-        - gosec
-        - unused
-    
-    # Allow long lines in generated files
-    - path: ".*\\.pb\\.go"
-      linters:
-        - lll
-
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0

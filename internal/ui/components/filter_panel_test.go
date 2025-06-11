@@ -93,7 +93,7 @@ func TestFilterPanel_ViewRendering(t *testing.T) {
 	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	view = panel.View()
 	assert.Contains(t, view, "Search:")
-	assert.Contains(t, view, "Press Enter to apply")
+	assert.Contains(t, view, "Enter save")
 
 	// Test state filter mode view
 	panel = NewFilterPanel()

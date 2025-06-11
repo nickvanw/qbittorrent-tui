@@ -1,3 +1,5 @@
+version: 2
+
 project_name: qbt-tui
 
 before:
@@ -31,16 +33,16 @@ builds:
 archives:
   - id: default
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -58,7 +60,7 @@ changelog:
 release:
   github:
     owner: nickvanw
-    name: qbitorrent-tui
+    name: qbittorrent-tui
   draft: false
   prerelease: auto
   name_template: "Release {{ .Tag }}"
@@ -82,23 +84,11 @@ release:
     qbt-tui --url http://localhost:8080 --username admin --password yourpass
     ```
 
-brews:
-  - name: qbt-tui
-    repository:
-      owner: nickvanw
-      name: homebrew-tap
-    folder: Formula
-    homepage: https://github.com/nickvanw/qbitorrent-tui
-    description: "Terminal UI for qBittorrent"
-    license: MIT
-    test: |
-      system "#{bin}/qbt-tui --help"
-
 nfpms:
   - id: packages
     package_name: qbt-tui
     vendor: nickvanw
-    homepage: https://github.com/nickvanw/qbitorrent-tui
+    homepage: https://github.com/nickvanw/qbittorrent-tui
     maintainer: Nick Van Wiggeren <nick@nickvanw.com>
     description: |-
       Terminal UI for qBittorrent
