@@ -33,16 +33,16 @@ builds:
 archives:
   - id: default
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -84,7 +84,7 @@ release:
     qbt-tui --url http://localhost:8080 --username admin --password yourpass
     ```
 
-brews:
+homebrew_formulas:
   - name: qbt-tui
     repository:
       owner: nickvanw
