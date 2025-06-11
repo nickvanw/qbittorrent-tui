@@ -58,6 +58,11 @@ func (t *TorrentDetails) SetTorrent(torrent *api.Torrent) tea.Cmd {
 	return t.fetchDetailedData()
 }
 
+// UpdateTorrent updates the torrent data without resetting UI state (scroll, activeTab)
+func (t *TorrentDetails) UpdateTorrent(torrent *api.Torrent) {
+	t.torrent = torrent
+}
+
 // SetSize updates the component dimensions
 func (t *TorrentDetails) SetSize(width, height int) {
 	t.width = width
@@ -125,6 +130,12 @@ func (t *TorrentDetails) fetchDetailedData() tea.Cmd {
 // Update handles messages
 func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 	switch msg := msg.(type) {
+	case time.Time:
+		// Handle tick messages for periodic refresh
+		if t.torrent != nil {
+			return t, t.fetchDetailedData()
+		}
+
 	case DetailsDataMsg:
 		t.isLoading = false
 		if msg.Err != nil {

@@ -245,6 +245,19 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyFilter()
 		m.isLoading = false
 
+		// Update torrent details if currently viewing a torrent
+		if m.viewMode == ViewModeDetails {
+			selectedHash := m.torrentList.GetSelectedHash()
+			if selectedHash != "" {
+				for _, torrent := range m.torrents {
+					if torrent.Hash == selectedHash {
+						m.torrentDetails.UpdateTorrent(&torrent)
+						break
+					}
+				}
+			}
+		}
+
 	case statsDataMsg:
 		m.stats = (*api.GlobalStats)(msg)
 		m.statsPanel.SetStats(m.stats)
@@ -275,6 +288,12 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Refresh data periodically
 		cmds = append(cmds, m.fetchAllData(), m.tickCmd())
+
+		// Also refresh torrent details if in details view
+		if m.viewMode == ViewModeDetails {
+			m.torrentDetails, cmd = m.torrentDetails.Update(time.Time(msg))
+			cmds = append(cmds, cmd)
+		}
 
 	case tea.KeyMsg:
 		// If filter panel is in input mode, let it handle all keys except quit
