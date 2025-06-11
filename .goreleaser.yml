@@ -1,3 +1,5 @@
+version: 2
+
 project_name: qbt-tui
 
 before:
@@ -19,7 +21,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
+    exclude:
       - goos: windows
         goarch: arm64
     ldflags:
