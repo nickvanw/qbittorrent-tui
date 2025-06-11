@@ -70,6 +70,10 @@ var (
 			Foreground(ErrorColor).
 			Bold(true)
 
+	SuccessStyle = lipgloss.NewStyle().
+			Foreground(AccentColor).
+			Bold(true)
+
 	AccentStyle = lipgloss.NewStyle().
 			Foreground(AccentColor).
 			Bold(true)

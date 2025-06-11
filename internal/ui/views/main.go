@@ -34,8 +34,10 @@ type (
 	categoriesDataMsg map[string]interface{}
 	tagsDataMsg       []string
 	errorMsg          error
+	successMsg        string
 	tickMsg           time.Time
 	clearErrorMsg     struct{}
+	clearSuccessMsg   struct{}
 )
 
 // MainView is the main application view
@@ -59,7 +61,13 @@ type MainView struct {
 	currentFilter filter.Filter
 	viewMode      ViewMode
 	lastError     error
+	lastSuccess   string
 	isLoading     bool
+
+	// Delete confirmation dialog state
+	showDeleteDialog bool
+	deleteTarget     *api.Torrent
+	deleteWithFiles  bool
 
 	// Dimensions
 	width  int
@@ -256,6 +264,13 @@ func (m *MainView) clearErrorTimer() tea.Cmd {
 	})
 }
 
+// clearSuccessTimer creates a timer to clear success messages after 3 seconds
+func (m *MainView) clearSuccessTimer() tea.Cmd {
+	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return clearSuccessMsg{}
+	})
+}
+
 // Update handles messages
 func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -315,6 +330,18 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearErrorMsg:
 		m.lastError = nil
 
+	case successMsg:
+		m.lastSuccess = string(msg)
+		// Clear any existing errors when showing success
+		m.lastError = nil
+		// Start timer to clear success after 3 seconds
+		cmds = append(cmds, m.clearSuccessTimer())
+		// Trigger refresh to get updated state from server after successful mutation
+		cmds = append(cmds, m.fetchAllData())
+
+	case clearSuccessMsg:
+		m.lastSuccess = ""
+
 	case components.DetailsDataMsg:
 		// Pass details data to torrent details component
 		m.torrentDetails, cmd = m.torrentDetails.Update(msg)
@@ -331,6 +358,31 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Handle delete confirmation dialog first (highest priority)
+		if m.showDeleteDialog {
+			switch msg.String() {
+			case "y", "Y", "enter":
+				// Confirm deletion
+				cmd = m.confirmDeleteTorrent()
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			case "n", "N", "esc":
+				// Cancel deletion
+				m.cancelDeleteTorrent()
+				return m, tea.Batch(cmds...)
+			case "f", "F":
+				// Toggle delete files option
+				m.deleteWithFiles = !m.deleteWithFiles
+				return m, tea.Batch(cmds...)
+			case "ctrl+c":
+				// Still allow quit even in dialog
+				return m, tea.Quit
+			default:
+				// Ignore other keys when dialog is open
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		// Don't clear errors immediately on keypress - let them persist until next action
 
 		// If filter panel is in input mode, let it handle all keys except quit
@@ -556,16 +608,27 @@ func (m *MainView) View() string {
 	filterView := m.renderFilterPanel(m.width, filterHeight)
 	sections = append(sections, filterView)
 
-	// Status line at the very bottom - either error (in red) or help
+	// Status line at the very bottom - priority: error (red) > success (green) > help
 	var statusView string
 	if m.lastError != nil {
 		statusView = styles.ErrorStyle.Render(fmt.Sprintf("Error: %v", m.lastError))
+	} else if m.lastSuccess != "" {
+		statusView = styles.SuccessStyle.Render(fmt.Sprintf("✓ %s", m.lastSuccess))
 	} else {
 		statusView = m.help.View(m.keys)
 	}
 	sections = append(sections, statusView)
 
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
+
+	// Overlay delete confirmation dialog if active
+	if m.showDeleteDialog {
+		dialog := m.renderDeleteDialog()
+		// Simple overlay - place dialog in center
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
+	return mainContent
 }
 
 // renderStatsPanel renders the stats panel
@@ -631,18 +694,24 @@ func (m *MainView) handlePauseTorrent() tea.Cmd {
 		}
 	}
 
-	return tea.Batch(
-		func() tea.Msg {
-			ctx := context.Background()
-			err := m.apiClient.PauseTorrents(ctx, []string{selectedHash})
-			if err != nil {
-				return errorMsg(fmt.Errorf("failed to pause torrent: %w", err))
-			}
-			return clearErrorMsg{} // Clear any previous errors on success
-		},
-		// Trigger immediate refresh to show updated state
-		m.fetchAllData(),
-	)
+	// Find the selected torrent to get its name for the success message
+	var torrentName string
+	for _, torrent := range m.torrents {
+		if torrent.Hash == selectedHash {
+			torrentName = torrent.Name
+			break
+		}
+	}
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.PauseTorrents(ctx, []string{selectedHash})
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to pause torrent: %w", err))
+		}
+		// Return success message
+		return successMsg(fmt.Sprintf("paused: %s", styles.TruncateString(torrentName, 40)))
+	}
 }
 
 // handleResumeTorrent resumes the currently selected torrent
@@ -654,21 +723,27 @@ func (m *MainView) handleResumeTorrent() tea.Cmd {
 		}
 	}
 
-	return tea.Batch(
-		func() tea.Msg {
-			ctx := context.Background()
-			err := m.apiClient.ResumeTorrents(ctx, []string{selectedHash})
-			if err != nil {
-				return errorMsg(fmt.Errorf("failed to resume torrent: %w", err))
-			}
-			return clearErrorMsg{} // Clear any previous errors on success
-		},
-		// Trigger immediate refresh to show updated state
-		m.fetchAllData(),
-	)
+	// Find the selected torrent to get its name for the success message
+	var torrentName string
+	for _, torrent := range m.torrents {
+		if torrent.Hash == selectedHash {
+			torrentName = torrent.Name
+			break
+		}
+	}
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.ResumeTorrents(ctx, []string{selectedHash})
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to resume torrent: %w", err))
+		}
+		// Return success message
+		return successMsg(fmt.Sprintf("resumed: %s", styles.TruncateString(torrentName, 40)))
+	}
 }
 
-// handleDeleteTorrent deletes the currently selected torrent (with confirmation)
+// handleDeleteTorrent shows confirmation dialog for deleting the currently selected torrent
 func (m *MainView) handleDeleteTorrent() tea.Cmd {
 	selectedHash := m.getSelectedTorrentHash()
 	if selectedHash == "" {
@@ -677,20 +752,63 @@ func (m *MainView) handleDeleteTorrent() tea.Cmd {
 		}
 	}
 
-	// TODO: Add confirmation dialog
-	// For now, delete without files (safer default)
-	return tea.Batch(
-		func() tea.Msg {
-			ctx := context.Background()
-			err := m.apiClient.DeleteTorrents(ctx, []string{selectedHash}, false)
-			if err != nil {
-				return errorMsg(fmt.Errorf("failed to delete torrent: %w", err))
-			}
-			return clearErrorMsg{} // Clear any previous errors on success
-		},
-		// Trigger immediate refresh to show updated list
-		m.fetchAllData(),
-	)
+	// Find the selected torrent object
+	var selectedTorrent *api.Torrent
+	for _, torrent := range m.torrents {
+		if torrent.Hash == selectedHash {
+			selectedTorrent = &torrent
+			break
+		}
+	}
+
+	if selectedTorrent == nil {
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("selected torrent not found"))
+		}
+	}
+
+	// Show confirmation dialog instead of immediate deletion
+	m.showDeleteDialog = true
+	m.deleteTarget = selectedTorrent
+	m.deleteWithFiles = false // Default to not deleting files
+
+	return nil // No command needed, just update UI state
+}
+
+// confirmDeleteTorrent performs the actual deletion after user confirmation
+func (m *MainView) confirmDeleteTorrent() tea.Cmd {
+	if m.deleteTarget == nil {
+		return nil
+	}
+
+	hash := m.deleteTarget.Hash
+	torrentName := m.deleteTarget.Name
+	deleteFiles := m.deleteWithFiles
+
+	// Close dialog
+	m.showDeleteDialog = false
+	m.deleteTarget = nil
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.DeleteTorrents(ctx, []string{hash}, deleteFiles)
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to delete torrent: %w", err))
+		}
+		// Return success message
+		successText := fmt.Sprintf("deleted: %s", styles.TruncateString(torrentName, 40))
+		if deleteFiles {
+			successText += " (with files)"
+		}
+		return successMsg(successText)
+	}
+}
+
+// cancelDeleteTorrent cancels the delete operation
+func (m *MainView) cancelDeleteTorrent() {
+	m.showDeleteDialog = false
+	m.deleteTarget = nil
+	m.deleteWithFiles = false
 }
 
 // getSelectedTorrentHash returns the hash of the currently selected torrent
@@ -787,13 +905,72 @@ func (m *MainView) renderDetailsView() string {
 	content := m.torrentDetails.View()
 	detailsPanel := styles.FocusedPanelStyle.Width(m.width).Height(contentHeight).Render(content)
 
-	// Status line at the bottom - either error (in red) or help
+	// Status line at the bottom - priority: error (red) > success (green) > help
 	var statusView string
 	if m.lastError != nil {
 		statusView = styles.ErrorStyle.Render(fmt.Sprintf("Error: %v", m.lastError))
+	} else if m.lastSuccess != "" {
+		statusView = styles.SuccessStyle.Render(fmt.Sprintf("✓ %s", m.lastSuccess))
 	} else {
 		statusView = m.help.View(m.keys)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, detailsPanel, statusView)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, detailsPanel, statusView)
+
+	// Overlay delete confirmation dialog if active
+	if m.showDeleteDialog {
+		dialog := m.renderDeleteDialog()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
+	return mainContent
+}
+
+// renderDeleteDialog renders the delete confirmation dialog
+func (m *MainView) renderDeleteDialog() string {
+	if m.deleteTarget == nil {
+		return ""
+	}
+
+	// Dialog box styling
+	dialogStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.AccentStyle.GetForeground()).
+		Padding(1, 2).
+		Width(60).
+		Align(lipgloss.Center)
+
+	// Title
+	title := styles.AccentStyle.Render("Delete Torrent")
+
+	// Torrent name (truncated if too long)
+	torrentName := m.deleteTarget.Name
+	if len(torrentName) > 50 {
+		torrentName = torrentName[:47] + "..."
+	}
+	nameText := fmt.Sprintf("Torrent: %s", styles.TextStyle.Render(torrentName))
+
+	// File deletion option
+	var fileText string
+	if m.deleteWithFiles {
+		fileText = fmt.Sprintf("[%s] Delete files from disk", styles.ErrorStyle.Render("✓"))
+	} else {
+		fileText = fmt.Sprintf("[%s] Delete files from disk", styles.DimStyle.Render(" "))
+	}
+
+	// Instructions
+	instructions := styles.DimStyle.Render("Y/Enter: Confirm  N/Esc: Cancel  F: Toggle files")
+
+	// Combine all parts
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		title,
+		"",
+		nameText,
+		"",
+		fileText,
+		"",
+		instructions,
+	)
+
+	return dialogStyle.Render(content)
 }
