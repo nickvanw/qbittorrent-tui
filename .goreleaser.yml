@@ -21,7 +21,7 @@ builds:
     goarch:
       - amd64
       - arm64
-    exclude:
+    ignore:
       - goos: windows
         goarch: arm64
     ldflags:
@@ -89,7 +89,7 @@ brews:
     repository:
       owner: nickvanw
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     homepage: https://github.com/nickvanw/qbitorrent-tui
     description: "Terminal UI for qBittorrent"
     license: MIT
