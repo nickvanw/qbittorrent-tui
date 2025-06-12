@@ -6,22 +6,20 @@ A terminal-based user interface for monitoring and managing qBittorrent. Built w
 
 ## Features
 
-- **Real-time monitoring** - Live torrent status updates
-- **Advanced filtering** - Filter by state, category, tracker, tags, or search
-- **Intuitive navigation** - Vim-like keyboard shortcuts
-- **Torrent details** - Drill down into individual torrent information
-- **Global statistics** - Download/upload speeds, connection status, disk space
+- **Real-time monitoring** - Live torrent status updates with configurable refresh intervals
+- **Advanced filtering** - Filter by state, category, tracker, tags, or text search
+- **Torrent management** - Add, pause, resume, and delete torrents
+- **Detailed views** - Drill down into individual torrent information with tabs for general info, trackers, peers, and files
+- **Intuitive navigation** - Vim-like keyboard shortcuts and responsive layout
 - **Flexible configuration** - TOML config files, environment variables, or CLI flags
-- **Responsive layout** - Automatically uses full terminal width
-- **Column sorting** - Sort by any column with visual indicators
-- **Configurable columns** - Show/hide columns including ETA, dates, and more
+- **Column customization** - Sort by any column and show/hide 14+ available columns
 
 ## Installation
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/qbittorrent-tui.git
+git clone https://github.com/nickvanw/qbittorrent-tui.git
 cd qbittorrent-tui
 make build
 sudo cp bin/qbt-tui /usr/local/bin/
@@ -30,7 +28,7 @@ sudo cp bin/qbt-tui /usr/local/bin/
 ### Using Go
 
 ```bash
-go install github.com/yourusername/qbittorrent-tui/cmd/qbt-tui@latest
+go install github.com/nickvanw/qbittorrent-tui/cmd/qbt-tui@latest
 ```
 
 ## Quick Start
@@ -46,36 +44,29 @@ go install github.com/yourusername/qbittorrent-tui/cmd/qbt-tui@latest
 
 ## Configuration
 
-Configuration priority: **CLI flags** > **Environment variables** > **Config file** > **Defaults**
+**Priority**: CLI flags > Environment variables > Config file > Defaults
 
-### Config File
-
-Create `~/.config/qbt-tui/config.toml`:
+### Config File (`~/.config/qbt-tui/config.toml`)
 
 ```toml
 [server]
 url = "http://localhost:8080"
 username = "admin"
 password = "secret"
-
-[ui]
-refresh_interval = 3  # seconds
-theme = "default"
+refresh_interval = 3
 ```
 
-### Environment Variables
+### Environment Variables / CLI Options
 
 ```bash
+# Environment
 export QBT_SERVER_URL="http://localhost:8080"
 export QBT_SERVER_USERNAME="admin"
 export QBT_SERVER_PASSWORD="secret"
-export QBT_UI_REFRESH_INTERVAL=3
-```
 
-### CLI Options
-
-```bash
-qbt-tui --help  # See all available options
+# CLI
+qbt-tui --url http://localhost:8080 --username admin --password secret
+qbt-tui --help  # See all options
 ```
 
 ## Keyboard Shortcuts
@@ -96,7 +87,7 @@ qbt-tui --help  # See all available options
 | `s` | Filter by state |
 | `c` | Filter by category |
 | `t` | Filter by tracker |
-| `a` | Filter by tag |
+| `T` | Filter by tag |
 | `x` | Clear all filters |
 
 ### Sorting
@@ -112,106 +103,34 @@ qbt-tui --help  # See all available options
 |-----|--------|
 | `C` | Configure columns |
 
-### Actions
+### Torrent Actions
+| Key | Action |
+|-----|--------|
+| `a` | Add torrent |
+| `p` | Pause torrent |
+| `u` | Resume torrent |
+| `d` | Delete torrent |
+
+### General
 | Key | Action |
 |-----|--------|
 | `r` | Refresh data |
 | `?` | Show/hide help |
 | `Ctrl+C` | Quit |
 
-## Filter States
-
-| State | Description |
-|-------|-------------|
-| `active` | Torrents actively transferring data |
-| `downloading` | Currently downloading |
-| `uploading` | Currently seeding/uploading |
-| `completed` | Download finished |
-| `paused` | Paused torrents |
-| `queued` | Queued for download/upload |
-| `stalled` | Stalled (no peers/seeds) |
-| `checking` | Checking files |
-| `error` | Error state |
-
 ## Development
 
-### Requirements
-
-- Go 1.19+
-- Docker (for integration tests)
-
-### Building
+Requires Go 1.19+ and Docker (for integration tests).
 
 ```bash
-# Build the application
-make build
-
-# Run tests
-make test
-
-# Generate coverage report
-make test-coverage
-
-# Run with development config
-make dev
-```
-
-### Testing
-
-```bash
-# Unit tests only
-make test-unit
-
-# Integration tests (requires Docker)
-make test-integration
-
-# Full validation (lint + test + coverage)
-make validate
-```
-
-## Architecture
-
-```
-├── cmd/qbt-tui/          # Main application entry point
-├── internal/
-│   ├── api/              # qBittorrent API client
-│   ├── config/           # Configuration management
-│   ├── filter/           # Torrent filtering logic
-│   └── ui/               # Terminal user interface
-│       ├── components/   # Reusable UI components
-│       ├── styles/       # Visual styling
-│       └── views/        # Application views
-└── testdata/             # Test fixtures and integration tests
+make build test validate  # Build, test, and lint
 ```
 
 ## Troubleshooting
 
-### Connection Issues
-
-**"Authentication required"** - Check username/password
-```bash
-qbt-tui --url http://localhost:8080 --username admin --password yourpassword
-```
-
-**"Connection refused"** - Ensure qBittorrent Web UI is enabled
-1. Open qBittorrent → Tools → Preferences
-2. Go to "Web UI" tab
-3. Check "Web User Interface (Remote control)"
-4. Set port (default: 8080)
-
-### Display Issues
-
-**"No torrents visible"** - Check filters
-- Press `x` to clear all filters
-- Press `r` to refresh data
-
-**"Free space shows 0 B"** - Update qBittorrent to latest version for full API support
-
-### Performance
-
-For 1000+ torrents, consider:
-- Increase `refresh_interval` to reduce API calls
-- Use specific filters to limit displayed torrents
+- **Connection issues**: Enable qBittorrent Web UI (Tools → Preferences → Web UI)
+- **No torrents visible**: Press `x` to clear filters or `r` to refresh  
+- **Performance**: Increase `refresh_interval` or use filters for many torrents
 
 ## Contributing
 
