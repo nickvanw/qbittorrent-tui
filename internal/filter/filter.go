@@ -2,6 +2,7 @@ package filter
 
 import (
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
@@ -136,6 +137,8 @@ func ExtractUniqueTrackers(torrents []api.Torrent) []string {
 	for d := range domains {
 		result = append(result, d)
 	}
+	// Sort tracker domains alphabetically for stable display order
+	sort.Strings(result)
 	return result
 }
 
@@ -152,6 +155,8 @@ func ExtractUniqueCategories(torrents []api.Torrent) []string {
 	for c := range categories {
 		result = append(result, c)
 	}
+	// Sort categories alphabetically for stable display order
+	sort.Strings(result)
 	return result
 }
 
@@ -171,6 +176,8 @@ func ExtractUniqueTags(torrents []api.Torrent) []string {
 	for tag := range tags {
 		result = append(result, tag)
 	}
+	// Sort tags alphabetically for stable display order
+	sort.Strings(result)
 	return result
 }
 

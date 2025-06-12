@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -136,10 +137,11 @@ type KeyMap struct {
 	Quit    key.Binding
 
 	// Torrent control
-	Pause  key.Binding
-	Resume key.Binding
-	Delete key.Binding
-	Add    key.Binding
+	Pause   key.Binding
+	Resume  key.Binding
+	Delete  key.Binding
+	Add     key.Binding
+	Columns key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view
@@ -150,10 +152,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Enter, k.Escape},    // Navigation and Actions
-		{k.Pause, k.Resume, k.Delete, k.Add}, // Torrent Control
-		{k.Refresh, k.Filter},                // Features
-		{k.Help, k.Quit},                     // General
+		{k.Up, k.Down, k.Enter, k.Escape},         // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete, k.Add},      // Torrent Control
+		{k.Refresh, k.Filter, k.Columns},          // Features
+		{k.Help, k.Quit},                          // General
 	}
 }
 
@@ -210,6 +212,10 @@ func DefaultKeyMap() KeyMap {
 		Add: key.NewBinding(
 			key.WithKeys("a"),
 			key.WithHelp("a", "add torrent"),
+		),
+		Columns: key.NewBinding(
+			key.WithKeys("C"),
+			key.WithHelp("C", "configure columns"),
 		),
 	}
 }
@@ -375,10 +381,14 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for name := range m.categories {
 			categoryNames = append(categoryNames, name)
 		}
+		// Sort categories alphabetically for stable display order
+		sort.Strings(categoryNames)
 		m.filterPanel.SetAvailableOptions(categoryNames, m.extractTrackerNames(), m.tags)
 
 	case tagsDataMsg:
 		m.tags = []string(msg)
+		// Sort tags alphabetically for stable display order
+		sort.Strings(m.tags)
 		m.filterPanel.SetAvailableOptions(m.extractCategoryNames(), m.extractTrackerNames(), m.tags)
 
 	case errorMsg:
@@ -522,6 +532,19 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// If torrent list is in column config mode, let it handle keys first (except quit)
+		if m.torrentList.IsInConfigMode() {
+			switch {
+			case key.Matches(msg, m.keys.Quit):
+				return m, tea.Quit
+			default:
+				// Pass to torrent list first for column configuration
+				m.torrentList, cmd = m.torrentList.Update(msg)
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -530,13 +553,19 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.viewMode == ViewModeDetails {
 				m.viewMode = ViewModeMain
 			} else if m.viewMode == ViewModeMain {
-				// Let filter panel handle escape to exit search mode
-				oldFilter := m.filterPanel.GetFilter()
-				m.filterPanel, cmd = m.filterPanel.Update(msg)
-				cmds = append(cmds, cmd)
-				if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
-					m.currentFilter = m.filterPanel.GetFilter()
-					m.applyFilter()
+				// Check if torrent list is in column config mode
+				if m.torrentList.IsInConfigMode() {
+					m.torrentList, cmd = m.torrentList.Update(msg)
+					cmds = append(cmds, cmd)
+				} else {
+					// Let filter panel handle escape to exit search mode
+					oldFilter := m.filterPanel.GetFilter()
+					m.filterPanel, cmd = m.filterPanel.Update(msg)
+					cmds = append(cmds, cmd)
+					if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
+						m.currentFilter = m.filterPanel.GetFilter()
+						m.applyFilter()
+					}
 				}
 			}
 
@@ -611,7 +640,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case msg.String() == "C": // Column configuration
+		case key.Matches(msg, m.keys.Columns):
 			if m.viewMode == ViewModeMain {
 				m.torrentList, cmd = m.torrentList.Update(msg)
 				cmds = append(cmds, cmd)
@@ -639,7 +668,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case msg.String() == "g": // Tag filter (taGs)
+		case msg.String() == "T": // Tag filter (Tags)
 			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
@@ -666,13 +695,9 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.viewMode == ViewModeDetails {
 				m.torrentDetails, cmd = m.torrentDetails.Update(msg)
 				cmds = append(cmds, cmd)
-			} else if m.torrentList.IsInConfigMode() {
-				// Torrent list is in column config mode - let it handle all keys
-				m.torrentList, cmd = m.torrentList.Update(msg)
-				cmds = append(cmds, cmd)
 			} else {
 				// Normal mode - pass navigation keys to torrent list (main focus)
-				// Note: filter panel interactive mode is handled earlier in the key hierarchy
+				// Note: filter panel interactive mode and column config mode are handled earlier in the key hierarchy
 				m.torrentList, cmd = m.torrentList.Update(msg)
 				cmds = append(cmds, cmd)
 			}
@@ -947,6 +972,8 @@ func (m *MainView) extractCategoryNames() []string {
 	for name := range m.categories {
 		names = append(names, name)
 	}
+	// Sort categories alphabetically for stable display order
+	sort.Strings(names)
 	return names
 }
 
