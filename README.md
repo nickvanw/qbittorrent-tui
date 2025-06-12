@@ -2,7 +2,7 @@
 
 A terminal-based user interface for monitoring and managing qBittorrent. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-![qBittorrent TUI Demo](demo.gif)
+![qBittorrent TUI Demo](https://github.com/user-attachments/assets/54e2d185-4adb-400b-b682-6bca59c36cf7)
 
 ## Features
 
