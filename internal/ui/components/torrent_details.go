@@ -147,7 +147,7 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 			t.peers = msg.Peers
 			t.files = msg.Files
 			t.lastError = nil
-			
+
 			// Sort trackers for stable display order
 			t.sortTrackers()
 		}
@@ -436,7 +436,7 @@ func (t *TorrentDetails) padString(s string, width int) string {
 	// Use rune count for proper Unicode handling
 	runes := []rune(s)
 	runeLen := len(runes)
-	
+
 	if runeLen > width {
 		// Truncate if too long
 		if width <= 3 {
@@ -470,7 +470,7 @@ func (t *TorrentDetails) renderFilesTab() string {
 		minWidth int
 		flex     float64
 	}{
-		{"Name", 35, 0.6},   // Give most space to filename
+		{"Name", 35, 0.6}, // Give most space to filename
 		{"Size", 10, 0.15},
 		{"Progress", 10, 0.15},
 		{"Priority", 8, 0.1},

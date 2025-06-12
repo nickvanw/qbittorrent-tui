@@ -71,16 +71,16 @@ const (
 
 // Message types
 type (
-	torrentDataMsg      []api.Torrent
-	statsDataMsg        *api.GlobalStats
-	categoriesDataMsg   map[string]interface{}
-	tagsDataMsg         []string
-	errorMsg            error
-	successMsg          string
-	tickMsg             time.Time
-	clearErrorMsg       struct{}
-	clearSuccessMsg     struct{}
-	delayedRefreshMsg   struct{}
+	torrentDataMsg    []api.Torrent
+	statsDataMsg      *api.GlobalStats
+	categoriesDataMsg map[string]interface{}
+	tagsDataMsg       []string
+	errorMsg          error
+	successMsg        string
+	tickMsg           time.Time
+	clearErrorMsg     struct{}
+	clearSuccessMsg   struct{}
+	delayedRefreshMsg struct{}
 )
 
 // MainView is the main application view
@@ -152,10 +152,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Enter, k.Escape},         // Navigation and Actions
-		{k.Pause, k.Resume, k.Delete, k.Add},      // Torrent Control
-		{k.Refresh, k.Filter, k.Columns},          // Features
-		{k.Help, k.Quit},                          // General
+		{k.Up, k.Down, k.Enter, k.Escape},    // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete, k.Add}, // Torrent Control
+		{k.Refresh, k.Filter, k.Columns},     // Features
+		{k.Help, k.Quit},                     // General
 	}
 }
 
