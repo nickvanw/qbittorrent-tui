@@ -70,15 +70,16 @@ const (
 
 // Message types
 type (
-	torrentDataMsg    []api.Torrent
-	statsDataMsg      *api.GlobalStats
-	categoriesDataMsg map[string]interface{}
-	tagsDataMsg       []string
-	errorMsg          error
-	successMsg        string
-	tickMsg           time.Time
-	clearErrorMsg     struct{}
-	clearSuccessMsg   struct{}
+	torrentDataMsg      []api.Torrent
+	statsDataMsg        *api.GlobalStats
+	categoriesDataMsg   map[string]interface{}
+	tagsDataMsg         []string
+	errorMsg            error
+	successMsg          string
+	tickMsg             time.Time
+	clearErrorMsg       struct{}
+	clearSuccessMsg     struct{}
+	delayedRefreshMsg   struct{}
 )
 
 // MainView is the main application view
@@ -323,6 +324,13 @@ func (m *MainView) clearSuccessTimer() tea.Cmd {
 	})
 }
 
+// delayedRefresh creates a delayed refresh to allow qBittorrent server to process changes
+func (m *MainView) delayedRefresh() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+		return delayedRefreshMsg{}
+	})
+}
+
 // Update handles messages
 func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -389,10 +397,15 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Start timer to clear success after 3 seconds
 		cmds = append(cmds, m.clearSuccessTimer())
 		// Trigger refresh to get updated state from server after successful mutation
-		cmds = append(cmds, m.fetchAllData())
+		// Add small delay to allow qBittorrent server to process the change
+		cmds = append(cmds, m.delayedRefresh())
 
 	case clearSuccessMsg:
 		m.lastSuccess = ""
+
+	case delayedRefreshMsg:
+		// Perform delayed refresh after mutation operations
+		cmds = append(cmds, m.fetchAllData())
 
 	case components.DetailsDataMsg:
 		// Pass details data to torrent details component

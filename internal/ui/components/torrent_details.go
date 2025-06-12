@@ -353,27 +353,95 @@ func (t *TorrentDetails) renderPeersTab() string {
 	lines = append(lines, styles.SubtitleStyle.Render(fmt.Sprintf("Peers (%d connected)", len(t.peers))))
 	lines = append(lines, "")
 
-	// Header
-	header := fmt.Sprintf("%-20s %-15s %-10s %-15s %-10s %-10s %-8s",
-		"IP:Port", "Client", "Country", "Connection", "Progress", "DL Speed", "UL Speed")
-	lines = append(lines, styles.DimStyle.Render(header))
-	lines = append(lines, styles.DimStyle.Render(strings.Repeat("-", 100)))
+	// Calculate available width (subtract padding)
+	availableWidth := t.width - 4
+	if availableWidth < 80 {
+		availableWidth = 80 // Minimum width
+	}
 
-	i := 1
+	// Define column configurations with responsive widths
+	columns := []struct {
+		title    string
+		minWidth int
+		flex     float64
+	}{
+		{"IP:Port", 18, 0.2},
+		{"Client", 15, 0.25},
+		{"Country", 8, 0.1},
+		{"Connection", 10, 0.15},
+		{"Progress", 8, 0.1},
+		{"DL Speed", 9, 0.1},
+		{"UL Speed", 9, 0.1},
+	}
+
+	// Calculate actual column widths
+	totalMinWidth := 0
+	for _, col := range columns {
+		totalMinWidth += col.minWidth
+	}
+
+	// Calculate flex space
+	flexSpace := availableWidth - totalMinWidth
+	if flexSpace < 0 {
+		flexSpace = 0
+	}
+
+	var widths []int
+	for _, col := range columns {
+		width := col.minWidth + int(float64(flexSpace)*col.flex)
+		widths = append(widths, width)
+	}
+
+	// Build header
+	var headerParts []string
+	for i, col := range columns {
+		headerParts = append(headerParts, t.padString(col.title, widths[i]))
+	}
+	lines = append(lines, styles.DimStyle.Render(strings.Join(headerParts, "")))
+	lines = append(lines, styles.DimStyle.Render(strings.Repeat("─", availableWidth)))
+
+	// Build data rows
 	for _, peer := range t.peers {
 		progress := fmt.Sprintf("%.1f%%", peer.Progress*100)
 		dlSpeed := formatBytes(peer.DlSpeed) + "/s"
 		ulSpeed := formatBytes(peer.UpSpeed) + "/s"
 		address := fmt.Sprintf("%s:%d", peer.IP, peer.Port)
 
-		line := fmt.Sprintf("%-20s %-15s %-10s %-15s %-10s %-10s %-8s",
-			address, peer.Client, peer.Country, peer.Connection,
-			progress, dlSpeed, ulSpeed)
-		lines = append(lines, line)
-		i++
+		values := []string{
+			address,
+			peer.Client,
+			peer.Country,
+			peer.Connection,
+			progress,
+			dlSpeed,
+			ulSpeed,
+		}
+
+		var rowParts []string
+		for i, value := range values {
+			rowParts = append(rowParts, t.padString(value, widths[i]))
+		}
+		lines = append(lines, strings.Join(rowParts, ""))
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// padString pads or truncates a string to the specified width
+func (t *TorrentDetails) padString(s string, width int) string {
+	// Use rune count for proper Unicode handling
+	runes := []rune(s)
+	runeLen := len(runes)
+	
+	if runeLen > width {
+		// Truncate if too long
+		if width <= 3 {
+			return string(runes[:width])
+		}
+		return string(runes[:width-3]) + "..."
+	}
+	// Pad with spaces if too short
+	return s + strings.Repeat(" ", width-runeLen)
 }
 
 // renderFilesTab renders the files information
@@ -386,24 +454,69 @@ func (t *TorrentDetails) renderFilesTab() string {
 	lines = append(lines, styles.SubtitleStyle.Render(fmt.Sprintf("Files (%d total)", len(t.files))))
 	lines = append(lines, "")
 
-	// Header
-	header := fmt.Sprintf("%-50s %-12s %-10s %-8s",
-		"Name", "Size", "Progress", "Priority")
-	lines = append(lines, styles.DimStyle.Render(header))
-	lines = append(lines, styles.DimStyle.Render(strings.Repeat("-", 80)))
+	// Calculate available width (subtract padding)
+	availableWidth := t.width - 4
+	if availableWidth < 80 {
+		availableWidth = 80 // Minimum width
+	}
 
+	// Define column configurations with responsive widths
+	columns := []struct {
+		title    string
+		minWidth int
+		flex     float64
+	}{
+		{"Name", 35, 0.6},   // Give most space to filename
+		{"Size", 10, 0.15},
+		{"Progress", 10, 0.15},
+		{"Priority", 8, 0.1},
+	}
+
+	// Calculate actual column widths
+	totalMinWidth := 0
+	for _, col := range columns {
+		totalMinWidth += col.minWidth
+	}
+
+	// Calculate flex space
+	flexSpace := availableWidth - totalMinWidth
+	if flexSpace < 0 {
+		flexSpace = 0
+	}
+
+	var widths []int
+	for _, col := range columns {
+		width := col.minWidth + int(float64(flexSpace)*col.flex)
+		widths = append(widths, width)
+	}
+
+	// Build header
+	var headerParts []string
+	for i, col := range columns {
+		headerParts = append(headerParts, t.padString(col.title, widths[i]))
+	}
+	lines = append(lines, styles.DimStyle.Render(strings.Join(headerParts, "")))
+	lines = append(lines, styles.DimStyle.Render(strings.Repeat("─", availableWidth)))
+
+	// Build data rows
 	for _, file := range t.files {
-		name := file.Name
-		if len(name) > 47 {
-			name = name[:44] + "..."
-		}
-
 		size := formatBytes(file.Size)
 		progress := fmt.Sprintf("%.1f%%", file.Progress*100)
 		priority := t.getFilePriority(file.Priority)
 
-		line := fmt.Sprintf("%-50s %-12s %-10s %-8s",
-			name, size, progress, priority)
+		values := []string{
+			file.Name,
+			size,
+			progress,
+			priority,
+		}
+
+		var rowParts []string
+		for i, value := range values {
+			rowParts = append(rowParts, t.padString(value, widths[i]))
+		}
+
+		line := strings.Join(rowParts, "")
 
 		// Style based on progress
 		if file.Progress >= 1.0 {
