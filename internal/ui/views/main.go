@@ -553,44 +553,29 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.viewMode == ViewModeDetails {
 				m.viewMode = ViewModeMain
 			} else if m.viewMode == ViewModeMain {
-				// Check if torrent list is in column config mode
-				if m.torrentList.IsInConfigMode() {
-					m.torrentList, cmd = m.torrentList.Update(msg)
-					cmds = append(cmds, cmd)
-				} else {
-					// Let filter panel handle escape to exit search mode
-					oldFilter := m.filterPanel.GetFilter()
-					m.filterPanel, cmd = m.filterPanel.Update(msg)
-					cmds = append(cmds, cmd)
-					if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
-						m.currentFilter = m.filterPanel.GetFilter()
-						m.applyFilter()
-					}
+				// Let filter panel handle escape to exit search mode
+				// Note: column config mode escape is handled earlier in the key hierarchy
+				oldFilter := m.filterPanel.GetFilter()
+				m.filterPanel, cmd = m.filterPanel.Update(msg)
+				cmds = append(cmds, cmd)
+				if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
+					m.currentFilter = m.filterPanel.GetFilter()
+					m.applyFilter()
 				}
 			}
 
 		case key.Matches(msg, m.keys.Enter):
 			if m.viewMode == ViewModeMain {
-				// If filter panel is in any interactive mode, let it handle enter
-				if m.filterPanel.IsInInteractiveMode() {
-					oldFilter := m.filterPanel.GetFilter()
-					m.filterPanel, cmd = m.filterPanel.Update(msg)
-					cmds = append(cmds, cmd)
-					if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
-						m.currentFilter = m.filterPanel.GetFilter()
-						m.applyFilter()
-					}
-				} else {
-					// Show details for selected torrent
-					selectedHash := m.torrentList.GetSelectedHash()
-					if selectedHash != "" {
-						for _, torrent := range m.torrents {
-							if torrent.Hash == selectedHash {
-								cmd = m.torrentDetails.SetTorrent(&torrent)
-								cmds = append(cmds, cmd)
-								m.viewMode = ViewModeDetails
-								break
-							}
+				// Show details for selected torrent
+				// Note: filter panel interactive mode enter is handled earlier in the key hierarchy
+				selectedHash := m.torrentList.GetSelectedHash()
+				if selectedHash != "" {
+					for _, torrent := range m.torrents {
+						if torrent.Hash == selectedHash {
+							cmd = m.torrentDetails.SetTorrent(&torrent)
+							cmds = append(cmds, cmd)
+							m.viewMode = ViewModeDetails
+							break
 						}
 					}
 				}
