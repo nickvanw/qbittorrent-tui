@@ -3,6 +3,8 @@ package views
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +20,45 @@ import (
 )
 
 // Removed FocusPane - using single-focus design with torrent list always focused
+
+// AddMode represents the add torrent dialog mode
+type AddMode int
+
+const (
+	ModeFile AddMode = iota
+	ModeURL
+)
+
+// FileEntry represents a file or directory entry
+type FileEntry struct {
+	name     string
+	isDir    bool
+	size     int64
+	fullPath string
+}
+
+// FileNavigator handles file browser functionality
+type FileNavigator struct {
+	currentPath   string
+	allEntries    []FileEntry
+	filtered      []FileEntry
+	selectedIdx   int
+	searchPattern string
+	searchMode    bool
+}
+
+// URLInput handles URL input functionality
+type URLInput struct {
+	url    string
+	cursor int
+}
+
+// AddTorrentDialog represents the add torrent dialog state
+type AddTorrentDialog struct {
+	mode     AddMode
+	fileNav  *FileNavigator
+	urlInput *URLInput
+}
 
 // ViewMode represents the current view mode
 type ViewMode int
@@ -69,6 +110,10 @@ type MainView struct {
 	deleteTarget     *api.Torrent
 	deleteWithFiles  bool
 
+	// Add torrent dialog state
+	showAddDialog bool
+	addDialog     *AddTorrentDialog
+
 	// Dimensions
 	width  int
 	height int
@@ -93,6 +138,7 @@ type KeyMap struct {
 	Pause  key.Binding
 	Resume key.Binding
 	Delete key.Binding
+	Add    key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view
@@ -103,10 +149,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Enter, k.Escape}, // Navigation and Actions
-		{k.Pause, k.Resume, k.Delete},     // Torrent Control
-		{k.Refresh, k.Filter},             // Features
-		{k.Help, k.Quit},                  // General
+		{k.Up, k.Down, k.Enter, k.Escape},    // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete, k.Add}, // Torrent Control
+		{k.Refresh, k.Filter},                // Features
+		{k.Help, k.Quit},                     // General
 	}
 }
 
@@ -160,11 +206,16 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("d"),
 			key.WithHelp("d", "delete"),
 		),
+		Add: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add torrent"),
+		),
 	}
 }
 
 // NewMainView creates a new main view
 func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
+	cwd, _ := os.Getwd() // Get current working directory, ignore error
 	return &MainView{
 		config:         cfg,
 		apiClient:      client,
@@ -175,6 +226,7 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 		help:           help.New(),
 		keys:           DefaultKeyMap(),
 		viewMode:       ViewModeMain,
+		addDialog:      NewAddTorrentDialog(cwd),
 	}
 }
 
@@ -358,7 +410,43 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		// Handle delete confirmation dialog first (highest priority)
+		// Handle add torrent dialog first (highest priority)
+		if m.showAddDialog {
+			switch msg.String() {
+			case "esc":
+				// Close dialog
+				m.showAddDialog = false
+				return m, tea.Batch(cmds...)
+			case "tab":
+				// Switch between file and URL modes
+				if m.addDialog.mode == ModeFile {
+					m.addDialog.mode = ModeURL
+				} else {
+					m.addDialog.mode = ModeFile
+				}
+				return m, tea.Batch(cmds...)
+			case "ctrl+c":
+				// Still allow quit even in dialog
+				return m, tea.Quit
+			default:
+				// Handle mode-specific keys - this catches ALL other keys
+				if m.addDialog.mode == ModeFile {
+					cmd = m.handleFileNavigatorKeys(msg.String())
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				} else {
+					cmd = m.handleURLInputKeys(msg) // Pass the full KeyMsg for URL input
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+				// IMPORTANT: Return here to prevent any other key handling when dialog is open
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		// Handle delete confirmation dialog second priority
 		if m.showDeleteDialog {
 			switch msg.String() {
 			case "y", "Y", "enter":
@@ -477,6 +565,9 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.handleDeleteTorrent()
 			cmds = append(cmds, cmd)
 
+		case key.Matches(msg, m.keys.Add):
+			m.showAddDialog = true
+
 		// Handle global filter keys BEFORE passing to components (to avoid conflicts)
 		case msg.String() == "s": // State filter
 			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
@@ -517,7 +608,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case msg.String() == "a": // Tag filter (tAgs)
+		case msg.String() == "g": // Tag filter (taGs)
 			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
 				oldFilter := m.filterPanel.GetFilter()
 				m.filterPanel, cmd = m.filterPanel.Update(msg)
@@ -621,7 +712,12 @@ func (m *MainView) View() string {
 
 	mainContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
-	// Overlay delete confirmation dialog if active
+	// Overlay dialogs if active (add torrent has priority)
+	if m.showAddDialog {
+		dialog := m.renderAddDialog()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
 	if m.showDeleteDialog {
 		dialog := m.renderDeleteDialog()
 		// Simple overlay - place dialog in center
@@ -917,7 +1013,12 @@ func (m *MainView) renderDetailsView() string {
 
 	mainContent := lipgloss.JoinVertical(lipgloss.Left, detailsPanel, statusView)
 
-	// Overlay delete confirmation dialog if active
+	// Overlay dialogs if active (add torrent has priority)
+	if m.showAddDialog {
+		dialog := m.renderAddDialog()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
 	if m.showDeleteDialog {
 		dialog := m.renderDeleteDialog()
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
@@ -973,4 +1074,413 @@ func (m *MainView) renderDeleteDialog() string {
 	)
 
 	return dialogStyle.Render(content)
+}
+
+// renderAddDialog renders the add torrent dialog
+func (m *MainView) renderAddDialog() string {
+	// Dialog box styling
+	dialogStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.AccentStyle.GetForeground()).
+		Padding(1, 2).
+		Width(70).
+		Height(25).
+		Align(lipgloss.Center)
+
+	// Title with mode tabs
+	title := styles.AccentStyle.Render("Add Torrent")
+
+	// Mode tabs
+	var fileTab, urlTab string
+	if m.addDialog.mode == ModeFile {
+		fileTab = styles.SelectedRowStyle.Render("[File Browser]")
+		urlTab = styles.DimStyle.Render(" URL ")
+	} else {
+		fileTab = styles.DimStyle.Render(" File Browser ")
+		urlTab = styles.SelectedRowStyle.Render("[URL]")
+	}
+	tabs := lipgloss.JoinHorizontal(lipgloss.Left, fileTab, "  ", urlTab)
+
+	// Content based on mode
+	var content string
+	if m.addDialog.mode == ModeFile {
+		content = m.renderFileNavigator()
+	} else {
+		content = m.renderURLInput()
+	}
+
+	// Instructions
+	instructions := styles.DimStyle.Render("Tab: Switch mode  Enter: Add  Esc: Cancel")
+
+	// Combine all parts
+	dialogContent := lipgloss.JoinVertical(lipgloss.Center,
+		title,
+		"",
+		tabs,
+		"",
+		content,
+		"",
+		instructions,
+	)
+
+	return dialogStyle.Render(dialogContent)
+}
+
+// renderFileNavigator renders the file navigator component
+func (m *MainView) renderFileNavigator() string {
+	nav := m.addDialog.fileNav
+
+	// Current path display
+	pathDisplay := fmt.Sprintf("📁 %s", styles.DimStyle.Render(nav.currentPath))
+
+	// Search pattern and match count
+	matchCount := len(nav.filtered) - countDirectories(nav.filtered) // Subtract directories
+	searchDisplay := fmt.Sprintf("🔍 %s", styles.AccentStyle.Render(nav.searchPattern))
+	if nav.searchMode {
+		searchDisplay += styles.AccentStyle.Render("▊") // Show cursor when in search mode
+	}
+	if matchCount > 0 {
+		searchDisplay += styles.DimStyle.Render(fmt.Sprintf("  [%d files]", matchCount))
+	}
+
+	// File listing
+	var fileLines []string
+	maxLines := 12 // Limit displayed files
+	startIdx := 0
+
+	// Calculate visible range (simple scrolling)
+	if nav.selectedIdx >= maxLines {
+		startIdx = nav.selectedIdx - maxLines + 1
+	}
+
+	for i := startIdx; i < len(nav.filtered) && i < startIdx+maxLines; i++ {
+		entry := nav.filtered[i]
+		line := m.formatFileEntry(entry, i == nav.selectedIdx)
+		fileLines = append(fileLines, line)
+	}
+
+	// Ensure we have some content
+	if len(fileLines) == 0 {
+		fileLines = append(fileLines, styles.DimStyle.Render("No files match pattern"))
+	}
+
+	// Instructions
+	navInstructions := styles.DimStyle.Render("↑↓: Navigate  Enter: Select  /: Filter  h: Up dir")
+
+	// Combine all parts
+	return lipgloss.JoinVertical(lipgloss.Left,
+		pathDisplay,
+		searchDisplay,
+		strings.Repeat("─", 60),
+		strings.Join(fileLines, "\n"),
+		strings.Repeat("─", 60),
+		navInstructions,
+	)
+}
+
+// renderURLInput renders the URL input component
+func (m *MainView) renderURLInput() string {
+	urlInput := m.addDialog.urlInput
+
+	// URL input field
+	inputStyle := styles.InputStyle.Width(50)
+
+	// Show actual URL or placeholder
+	urlDisplay := urlInput.url
+	if len(urlDisplay) == 0 {
+		urlDisplay = styles.DimStyle.Render("https://example.com/file.torrent")
+	} else {
+		urlDisplay = styles.TextStyle.Render(urlDisplay + "▊") // Show cursor
+	}
+
+	inputField := inputStyle.Render(urlDisplay)
+
+	// Instructions
+	urlInstructions := styles.DimStyle.Render("Enter URL to .torrent file")
+
+	return lipgloss.JoinVertical(lipgloss.Center,
+		"",
+		"URL:",
+		inputField,
+		"",
+		urlInstructions,
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+	)
+}
+
+// formatFileEntry formats a file entry for display
+func (m *MainView) formatFileEntry(entry FileEntry, selected bool) string {
+	var icon, sizeStr string
+
+	if entry.isDir {
+		icon = "📁"
+		if entry.name == ".." {
+			sizeStr = ""
+		} else {
+			sizeStr = styles.DimStyle.Render("DIR")
+		}
+	} else {
+		icon = "📄"
+		sizeStr = styles.FormatBytes(entry.size)
+	}
+
+	// Truncate filename if too long
+	name := entry.name
+	maxNameLen := 40
+	if len(name) > maxNameLen {
+		name = name[:maxNameLen-3] + "..."
+	}
+
+	line := fmt.Sprintf("%s %s", icon, name)
+
+	// Add size info (right-aligned)
+	if sizeStr != "" {
+		padding := 50 - len(line)
+		if padding > 0 {
+			line += strings.Repeat(" ", padding) + sizeStr
+		}
+	}
+
+	// Apply selection styling
+	if selected {
+		return styles.SelectedRowStyle.Render(line)
+	}
+	return line
+}
+
+// countDirectories counts directory entries in the filtered list
+func countDirectories(entries []FileEntry) int {
+	count := 0
+	for _, entry := range entries {
+		if entry.isDir {
+			count++
+		}
+	}
+	return count
+}
+
+// NewAddTorrentDialog creates a new add torrent dialog
+func NewAddTorrentDialog(startPath string) *AddTorrentDialog {
+	fileNav := &FileNavigator{
+		currentPath:   startPath,
+		selectedIdx:   0,
+		searchPattern: "*.torrent", // Default to torrent files
+		searchMode:    false,
+	}
+	fileNav.readDirectory() // Initialize directory contents
+
+	return &AddTorrentDialog{
+		mode:    ModeFile, // Start with file browser by default
+		fileNav: fileNav,
+		urlInput: &URLInput{
+			url:    "",
+			cursor: 0,
+		},
+	}
+}
+
+// NewFileNavigator creates a new file navigator
+func NewFileNavigator(startPath string) *FileNavigator {
+	fn := &FileNavigator{
+		currentPath:   startPath,
+		selectedIdx:   0,
+		searchPattern: "*.torrent",
+		searchMode:    false,
+	}
+	fn.readDirectory()
+	return fn
+}
+
+// readDirectory reads the current directory and applies filter
+func (f *FileNavigator) readDirectory() {
+	f.allEntries = []FileEntry{}
+	f.selectedIdx = 0
+
+	entries, err := os.ReadDir(f.currentPath)
+	if err != nil {
+		return // Handle error gracefully by showing empty directory
+	}
+
+	// Add parent directory entry if not at root
+	if f.currentPath != "/" && f.currentPath != "" {
+		f.allEntries = append(f.allEntries, FileEntry{
+			name:     "..",
+			isDir:    true,
+			size:     0,
+			fullPath: filepath.Dir(f.currentPath),
+		})
+	}
+
+	// Add all entries
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		fullPath := filepath.Join(f.currentPath, entry.Name())
+		f.allEntries = append(f.allEntries, FileEntry{
+			name:     entry.Name(),
+			isDir:    entry.IsDir(),
+			size:     info.Size(),
+			fullPath: fullPath,
+		})
+	}
+
+	f.applyFilter()
+}
+
+// applyFilter applies the current search pattern to files
+func (f *FileNavigator) applyFilter() {
+	f.filtered = []FileEntry{}
+
+	// Always include directories for navigation
+	for _, entry := range f.allEntries {
+		if entry.isDir {
+			f.filtered = append(f.filtered, entry)
+		}
+	}
+
+	// Add matching files
+	for _, entry := range f.allEntries {
+		if !entry.isDir {
+			matched, _ := filepath.Match(f.searchPattern, entry.name)
+			if matched {
+				f.filtered = append(f.filtered, entry)
+			}
+		}
+	}
+
+	// Ensure selectedIdx is in bounds
+	if f.selectedIdx >= len(f.filtered) {
+		f.selectedIdx = len(f.filtered) - 1
+	}
+	if f.selectedIdx < 0 {
+		f.selectedIdx = 0
+	}
+}
+
+// handleFileNavigatorKeys handles keyboard input for file navigator
+func (m *MainView) handleFileNavigatorKeys(key string) tea.Cmd {
+	nav := m.addDialog.fileNav
+
+	switch key {
+	case "up", "k":
+		if nav.selectedIdx > 0 {
+			nav.selectedIdx--
+		}
+	case "down", "j":
+		if nav.selectedIdx < len(nav.filtered)-1 {
+			nav.selectedIdx++
+		}
+	case "enter":
+		if nav.selectedIdx < len(nav.filtered) {
+			selected := nav.filtered[nav.selectedIdx]
+			if selected.isDir {
+				// Navigate into directory
+				nav.currentPath = selected.fullPath
+				nav.readDirectory()
+			} else {
+				// Select file for upload
+				return m.addTorrentFile(selected.fullPath)
+			}
+		}
+	case "h", "backspace":
+		// Go up one directory
+		if nav.currentPath != "/" && nav.currentPath != "" {
+			nav.currentPath = filepath.Dir(nav.currentPath)
+			nav.readDirectory()
+		}
+	case "/":
+		// Toggle search mode
+		nav.searchMode = !nav.searchMode
+		if nav.searchMode {
+			nav.searchPattern = ""
+		} else {
+			nav.searchPattern = "*.torrent"
+		}
+		nav.applyFilter()
+	default:
+		// Handle search input if in search mode
+		if nav.searchMode {
+			if key == "backspace" {
+				if len(nav.searchPattern) > 0 {
+					nav.searchPattern = nav.searchPattern[:len(nav.searchPattern)-1]
+					nav.applyFilter()
+				}
+			} else if len(key) == 1 {
+				nav.searchPattern += key
+				nav.applyFilter()
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleURLInputKeys handles keyboard input for URL input
+func (m *MainView) handleURLInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
+	urlInput := m.addDialog.urlInput
+
+	switch keyMsg.String() {
+	case "enter":
+		if len(urlInput.url) > 0 {
+			return m.addTorrentURL(urlInput.url)
+		}
+	case "backspace":
+		if len(urlInput.url) > 0 {
+			urlInput.url = urlInput.url[:len(urlInput.url)-1]
+		}
+	case "ctrl+a":
+		// Select all (clear field)
+		urlInput.url = ""
+	default:
+		// Handle character input - this includes paste operations
+		// Bubble Tea provides the input as runes which handles multi-character paste
+		if len(keyMsg.Runes) > 0 {
+			for _, r := range keyMsg.Runes {
+				// Only add printable characters (includes all URL chars: :, /, ?, =, etc.)
+				if r >= 32 && r <= 126 {
+					urlInput.url += string(r)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// addTorrentFile adds a torrent from a local file
+func (m *MainView) addTorrentFile(filePath string) tea.Cmd {
+	m.showAddDialog = false
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.AddTorrentFile(ctx, filePath)
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to add torrent file: %w", err))
+		}
+		filename := filepath.Base(filePath)
+		return successMsg(fmt.Sprintf("added torrent: %s", styles.TruncateString(filename, 40)))
+	}
+}
+
+// addTorrentURL adds a torrent from a URL
+func (m *MainView) addTorrentURL(url string) tea.Cmd {
+	m.showAddDialog = false
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.AddTorrentURL(ctx, url)
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to add torrent from URL: %w", err))
+		}
+		return successMsg(fmt.Sprintf("added torrent from URL"))
+	}
 }

@@ -155,7 +155,7 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 				f.backupFilter = f.filter
 				f.mode = FilterModeTracker
 				f.cursor = 0
-			case "a":
+			case "g":
 				f.backupFilter = f.filter
 				f.mode = FilterModeTag
 				f.cursor = 0
@@ -227,7 +227,7 @@ func (f *FilterPanel) renderNormalMode() string {
 	}
 
 	// Help text
-	help := styles.DimStyle.Render("Press: / search • s state • c category • t tracker • a tag • x clear")
+	help := styles.DimStyle.Render("Press: / search • s state • c category • t tracker • g tag • x clear")
 
 	// Calculate space usage
 	filterLen := lipgloss.Width(filterSection)
@@ -291,7 +291,7 @@ func (f *FilterPanel) renderSimpleNormalMode() string {
 	}
 
 	// Help text
-	help := styles.DimStyle.Render("Press: / search • s state • c category • t tracker • a tag • x clear")
+	help := styles.DimStyle.Render("Press: / search • s state • c category • t tracker • g tag • x clear")
 	parts = append(parts, help)
 
 	return strings.Join(parts, " ")

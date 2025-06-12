@@ -97,13 +97,13 @@ func (s *StatsPanel) renderTransferStats() string {
 
 	lines = append(lines, styles.SubtitleStyle.Render("Transfer"))
 
-	// Download speed
+	// Download and Upload speeds on same line for clarity
 	dlSpeed := styles.FormatSpeed(s.stats.DlInfoSpeed)
-	lines = append(lines, fmt.Sprintf("↓ %s", styles.DownloadingStyle.Render(dlSpeed)))
-
-	// Upload speed
 	upSpeed := styles.FormatSpeed(s.stats.UpInfoSpeed)
-	lines = append(lines, fmt.Sprintf("↑ %s", styles.SeedingStyle.Render(upSpeed)))
+	speedLine := fmt.Sprintf("↓ %s  ↑ %s",
+		styles.DownloadingStyle.Render(dlSpeed),
+		styles.SeedingStyle.Render(upSpeed))
+	lines = append(lines, speedLine)
 
 	// Total downloaded/uploaded
 	totalDl := styles.FormatBytes(s.stats.DlInfoData)
@@ -116,7 +116,7 @@ func (s *StatsPanel) renderTransferStats() string {
 	lines = append(lines, styles.DimStyle.Render(fmt.Sprintf("Session: ↓%s ↑%s (%.2f)", totalDl, totalUp, ratio)))
 
 	return lipgloss.NewStyle().
-		Width(40).
+		Width(50).
 		Padding(0, 2, 0, 0).
 		Render(strings.Join(lines, "\n"))
 }

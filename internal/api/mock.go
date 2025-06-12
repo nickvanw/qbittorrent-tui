@@ -299,6 +299,30 @@ func (m *MockClient) DeleteTorrents(ctx context.Context, hashes []string, delete
 	return nil
 }
 
+// AddTorrentFile simulates adding a torrent from a file
+func (m *MockClient) AddTorrentFile(ctx context.Context, filePath string) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would add the torrent file
+	return nil
+}
+
+// AddTorrentURL simulates adding a torrent from a URL
+func (m *MockClient) AddTorrentURL(ctx context.Context, url string) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would add the torrent from URL
+	return nil
+}
+
 // SetupMockClientWithData creates a mock client with predefined test data
 func SetupMockClientWithData() *MockClient {
 	client := NewMockClient()

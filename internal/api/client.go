@@ -1,13 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -281,6 +285,88 @@ func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFile
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("delete failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// AddTorrentFile adds a torrent from a local .torrent file
+func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
+	// Read the torrent file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open torrent file: %w", err)
+	}
+	defer file.Close()
+
+	// Create multipart form data
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	// Add the torrent file
+	part, err := writer.CreateFormFile("torrents", filepath.Base(filePath))
+	if err != nil {
+		return fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("failed to copy file data: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/add", &body)
+	if err != nil {
+		return fmt.Errorf("failed to create add request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Referer", c.baseURL)
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("add torrent request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("add torrent failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// AddTorrentURL adds a torrent from a URL
+func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
+	data := url.Values{
+		"urls": {torrentURL},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/add", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create add URL request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("add torrent URL request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("add torrent URL failed with status: %d", resp.StatusCode)
 	}
 
 	return nil
