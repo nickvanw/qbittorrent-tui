@@ -504,6 +504,24 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// If filter panel is in interactive mode, let it handle keys first (except quit)
+		if m.filterPanel.IsInInteractiveMode() {
+			switch {
+			case key.Matches(msg, m.keys.Quit):
+				return m, tea.Quit
+			default:
+				// Pass to filter panel first, then fall through to global keys if not handled
+				oldFilter := m.filterPanel.GetFilter()
+				m.filterPanel, cmd = m.filterPanel.Update(msg)
+				cmds = append(cmds, cmd)
+				if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
+					m.currentFilter = m.filterPanel.GetFilter()
+					m.applyFilter()
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -652,18 +670,9 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Torrent list is in column config mode - let it handle all keys
 				m.torrentList, cmd = m.torrentList.Update(msg)
 				cmds = append(cmds, cmd)
-			} else if m.filterPanel.IsInInteractiveMode() {
-				// Filter panel is in interactive mode (state/category/tracker/tag selection)
-				// Let it handle navigation keys
-				oldFilter := m.filterPanel.GetFilter()
-				m.filterPanel, cmd = m.filterPanel.Update(msg)
-				cmds = append(cmds, cmd)
-				if !filterEqual(oldFilter, m.filterPanel.GetFilter()) {
-					m.currentFilter = m.filterPanel.GetFilter()
-					m.applyFilter()
-				}
 			} else {
 				// Normal mode - pass navigation keys to torrent list (main focus)
+				// Note: filter panel interactive mode is handled earlier in the key hierarchy
 				m.torrentList, cmd = m.torrentList.Update(msg)
 				cmds = append(cmds, cmd)
 			}

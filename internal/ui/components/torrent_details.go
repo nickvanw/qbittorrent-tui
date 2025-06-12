@@ -3,6 +3,7 @@ package components
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -146,6 +147,9 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 			t.peers = msg.Peers
 			t.files = msg.Files
 			t.lastError = nil
+			
+			// Sort trackers for stable display order
+			t.sortTrackers()
 		}
 
 	case tea.KeyMsg:
@@ -680,6 +684,8 @@ func (t *TorrentDetails) getStatusDisplay(state string) string {
 		return styles.DimStyle.Render("Paused")
 	case "pausedUP":
 		return styles.DimStyle.Render("Paused (seeding)")
+	case "stoppedUP":
+		return styles.DimStyle.Render("Paused (seeding)")
 	case "queuedDL":
 		return styles.DimStyle.Render("Queued (download)")
 	case "queuedUP":
@@ -693,6 +699,18 @@ func (t *TorrentDetails) getStatusDisplay(state string) string {
 	default:
 		return state
 	}
+}
+
+// sortTrackers sorts trackers by tier (ascending) then by URL (alphabetically)
+func (t *TorrentDetails) sortTrackers() {
+	sort.Slice(t.trackers, func(i, j int) bool {
+		// First sort by tier (lower tier = higher priority)
+		if t.trackers[i].Tier != t.trackers[j].Tier {
+			return t.trackers[i].Tier < t.trackers[j].Tier
+		}
+		// If tiers are equal, sort by URL alphabetically
+		return strings.ToLower(t.trackers[i].URL) < strings.ToLower(t.trackers[j].URL)
+	})
 }
 
 // formatBytes formats a byte count as human readable string

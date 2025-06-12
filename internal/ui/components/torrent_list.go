@@ -375,6 +375,8 @@ func (t *TorrentList) getStatusDisplay(state string) string {
 		return "Paused DL"
 	case "pausedUP":
 		return "Paused UP"
+	case "stoppedUP":
+		return "Paused UP"
 	case "queuedDL":
 		return "Queued DL"
 	case "queuedUP":

@@ -147,6 +147,7 @@ const (
 	StateMissingFiles       TorrentState = "missingFiles"
 	StateUploading          TorrentState = "uploading"
 	StatePausedUP           TorrentState = "pausedUP"
+	StateStoppedUP          TorrentState = "stoppedUP" // Undocumented but real state
 	StateQueuedUP           TorrentState = "queuedUP"
 	StateStalledUP          TorrentState = "stalledUP"
 	StateForcedUP           TorrentState = "forcedUP"
@@ -188,7 +189,7 @@ func (s TorrentState) IsUploading() bool {
 }
 
 func (s TorrentState) IsPaused() bool {
-	return s == StatePausedDL || s == StatePausedUP
+	return s == StatePausedDL || s == StatePausedUP || s == StateStoppedUP
 }
 
 func (s TorrentState) IsActive() bool {
