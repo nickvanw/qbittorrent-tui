@@ -39,16 +39,6 @@ jobs:
     - name: Run unit tests
       run: go test -short -race -coverprofile=coverage.out ./...
 
-    - name: Generate coverage report
-      run: go tool cover -func=coverage.out
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
-
   lint:
     name: Lint
     runs-on: ubuntu-latest
