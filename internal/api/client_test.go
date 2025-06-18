@@ -95,7 +95,7 @@ func TestClientLogin(t *testing.T) {
 			response:      "Internal Server Error",
 			statusCode:    http.StatusInternalServerError,
 			expectError:   true,
-			errorContains: "login failed with status 500",
+			errorContains: "server error",
 		},
 	}
 
@@ -205,7 +205,7 @@ func TestClientGetTorrents(t *testing.T) {
 			statusCode:    http.StatusInternalServerError,
 			response:      "Internal Server Error",
 			expectError:   true,
-			errorContains: "request failed with status 500",
+			errorContains: "server error",
 		},
 	}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -24,7 +25,7 @@ type Client struct {
 func NewClient(baseURL string) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cookie jar: %w", err)
+		return nil, NewValidationError("failed to create cookie jar", err)
 	}
 
 	return &Client{
@@ -44,7 +45,7 @@ func (c *Client) Login(username, password string) error {
 
 	req, err := http.NewRequest("POST", c.baseURL+"/api/v2/auth/login", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create login request: %w", err)
+		return NewValidationError("failed to create login request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -52,22 +53,29 @@ func (c *Client) Login(username, password string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("login request failed: %w", err)
+		// Check if it's a timeout
+		if os.IsTimeout(err) {
+			return NewTimeoutError("login request timed out", err)
+		}
+		return NewNetworkError("login request failed", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return NewNetworkError("failed to read response body", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return NewAuthError(fmt.Sprintf("authentication failed: %s", string(body)), nil)
+		}
+		return WrapHTTPError(resp, nil)
 	}
 
 	responseStr := strings.TrimSpace(string(body))
 	if responseStr == "Fails." {
-		return fmt.Errorf("invalid username or password")
+		return NewAuthError("invalid username or password", nil)
 	}
 
 	// Check if we got the SID cookie
@@ -77,7 +85,7 @@ func (c *Client) Login(username, password string) error {
 		}
 	}
 
-	return nil
+	return NewServerError(0, "no SID cookie received", nil)
 }
 
 func (c *Client) GetTorrents(ctx context.Context) ([]Torrent, error) {
@@ -96,7 +104,7 @@ func (c *Client) GetTorrentsFiltered(ctx context.Context, filter map[string]stri
 
 	var torrents []Torrent
 	if err := c.get(ctx, endpoint, &torrents); err != nil {
-		return nil, fmt.Errorf("failed to get torrents: %w", err)
+		return nil, err
 	}
 
 	return torrents, nil
@@ -106,7 +114,7 @@ func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
 	// Get transfer info
 	var stats GlobalStats
 	if err := c.get(ctx, "/api/v2/transfer/info", &stats); err != nil {
-		return nil, fmt.Errorf("failed to get transfer info: %w", err)
+		return nil, err
 	}
 
 	// Get maindata for free disk space
@@ -128,7 +136,7 @@ func (c *Client) GetTorrentProperties(ctx context.Context, hash string) (*Torren
 
 	var props TorrentProperties
 	if err := c.get(ctx, endpoint, &props); err != nil {
-		return nil, fmt.Errorf("failed to get torrent properties: %w", err)
+		return nil, err
 	}
 
 	return &props, nil
@@ -137,7 +145,7 @@ func (c *Client) GetTorrentProperties(ctx context.Context, hash string) (*Torren
 func (c *Client) GetCategories(ctx context.Context) (map[string]interface{}, error) {
 	var categories map[string]interface{}
 	if err := c.get(ctx, "/api/v2/torrents/categories", &categories); err != nil {
-		return nil, fmt.Errorf("failed to get categories: %w", err)
+		return nil, err
 	}
 
 	return categories, nil
@@ -146,7 +154,7 @@ func (c *Client) GetCategories(ctx context.Context) (map[string]interface{}, err
 func (c *Client) GetTags(ctx context.Context) ([]string, error) {
 	var tags []string
 	if err := c.get(ctx, "/api/v2/torrents/tags", &tags); err != nil {
-		return nil, fmt.Errorf("failed to get tags: %w", err)
+		return nil, err
 	}
 
 	return tags, nil
@@ -157,7 +165,7 @@ func (c *Client) GetTorrentTrackers(ctx context.Context, hash string) ([]Tracker
 	endpoint := fmt.Sprintf("/api/v2/torrents/trackers?hash=%s", hash)
 	var trackers []Tracker
 	if err := c.get(ctx, endpoint, &trackers); err != nil {
-		return nil, fmt.Errorf("failed to get torrent trackers: %w", err)
+		return nil, err
 	}
 	return trackers, nil
 }
@@ -172,7 +180,7 @@ func (c *Client) GetTorrentPeers(ctx context.Context, hash string) (map[string]P
 	}
 
 	if err := c.get(ctx, endpoint, &response); err != nil {
-		return nil, fmt.Errorf("failed to get torrent peers: %w", err)
+		return nil, err
 	}
 
 	return response.Peers, nil
@@ -183,7 +191,7 @@ func (c *Client) GetTorrentFiles(ctx context.Context, hash string) ([]TorrentFil
 	endpoint := fmt.Sprintf("/api/v2/torrents/files?hash=%s", hash)
 	var files []TorrentFile
 	if err := c.get(ctx, endpoint, &files); err != nil {
-		return nil, fmt.Errorf("failed to get torrent files: %w", err)
+		return nil, err
 	}
 	return files, nil
 }
@@ -198,7 +206,7 @@ func (c *Client) PauseTorrents(ctx context.Context, hashes []string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/stop", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create pause request: %w", err)
+		return NewValidationError("failed to create pause request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -206,12 +214,15 @@ func (c *Client) PauseTorrents(ctx context.Context, hashes []string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("pause request failed: %w", err)
+		if os.IsTimeout(err) {
+			return NewTimeoutError("pause request timed out", err)
+		}
+		return NewNetworkError("pause request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("pause failed with status: %d", resp.StatusCode)
+		return WrapHTTPError(resp, nil)
 	}
 
 	return nil
@@ -227,7 +238,7 @@ func (c *Client) ResumeTorrents(ctx context.Context, hashes []string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/start", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create resume request: %w", err)
+		return NewValidationError("failed to create resume request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -235,12 +246,15 @@ func (c *Client) ResumeTorrents(ctx context.Context, hashes []string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("resume request failed: %w", err)
+		if os.IsTimeout(err) {
+			return NewTimeoutError("resume request timed out", err)
+		}
+		return NewNetworkError("resume request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("resume failed with status: %d", resp.StatusCode)
+		return WrapHTTPError(resp, nil)
 	}
 
 	return nil
@@ -261,7 +275,7 @@ func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFile
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/delete", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create delete request: %w", err)
+		return NewValidationError("failed to create delete request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -269,12 +283,15 @@ func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFile
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("delete request failed: %w", err)
+		if os.IsTimeout(err) {
+			return NewTimeoutError("delete request timed out", err)
+		}
+		return NewNetworkError("delete request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("delete failed with status: %d", resp.StatusCode)
+		return WrapHTTPError(resp, nil)
 	}
 
 	return nil
@@ -285,7 +302,7 @@ func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
 	// Read the torrent file
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open torrent file: %w", err)
+		return NewValidationError("failed to open torrent file", err)
 	}
 	defer file.Close()
 
@@ -296,21 +313,21 @@ func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
 	// Add the torrent file
 	part, err := writer.CreateFormFile("torrents", filepath.Base(filePath))
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
+		return NewValidationError("failed to create form file", err)
 	}
 
 	if _, err := io.Copy(part, file); err != nil {
-		return fmt.Errorf("failed to copy file data: %w", err)
+		return NewValidationError("failed to copy file data", err)
 	}
 
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf("failed to close multipart writer: %w", err)
+		return NewValidationError("failed to close multipart writer", err)
 	}
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/add", &body)
 	if err != nil {
-		return fmt.Errorf("failed to create add request: %w", err)
+		return NewValidationError("failed to create add request", err)
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -318,12 +335,15 @@ func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("add torrent request failed: %w", err)
+		if os.IsTimeout(err) {
+			return NewTimeoutError("add torrent request timed out", err)
+		}
+		return NewNetworkError("add torrent request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("add torrent failed with status: %d", resp.StatusCode)
+		return WrapHTTPError(resp, nil)
 	}
 
 	return nil
@@ -337,7 +357,7 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/add", strings.NewReader(data.Encode()))
 	if err != nil {
-		return fmt.Errorf("failed to create add URL request: %w", err)
+		return NewValidationError("failed to create add URL request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -345,12 +365,15 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("add torrent URL request failed: %w", err)
+		if os.IsTimeout(err) {
+			return NewTimeoutError("add torrent URL request timed out", err)
+		}
+		return NewNetworkError("add torrent URL request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("add torrent URL failed with status: %d", resp.StatusCode)
+		return WrapHTTPError(resp, nil)
 	}
 
 	return nil
@@ -359,31 +382,41 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return NewValidationError("failed to create request", err)
 	}
 
 	req.Header.Set("Referer", c.baseURL)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		// Check if it's a timeout or context cancellation
+		if errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err) {
+			return NewTimeoutError("request timed out", err)
+		}
+		if errors.Is(err, context.Canceled) {
+			return NewNetworkError("request canceled", err)
+		}
+		return NewNetworkError("request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("authentication required (403 Forbidden)")
+		return NewAuthError("authentication required (403 Forbidden)", nil)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("request failed with status %d (failed to read body: %w)", resp.StatusCode, err)
+			return NewNetworkError(fmt.Sprintf("failed to read error response (status %d)", resp.StatusCode), err)
 		}
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+		if resp.StatusCode == http.StatusUnauthorized {
+			return NewAuthError(fmt.Sprintf("authentication failed: %s", string(body)), nil)
+		}
+		return WrapHTTPError(resp, fmt.Errorf("%s", string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+		return NewServerError(0, "failed to decode response", err)
 	}
 
 	return nil
