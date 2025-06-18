@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,7 +107,7 @@ refresh_interval = 0`,
 				defer os.Chdir(oldDir)
 			}
 
-			cfg, err := Load()
+			cfg, err := Load(nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -195,6 +196,164 @@ func TestConfigValidation(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.errMsg)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestConfigPrecedence(t *testing.T) {
+	tests := []struct {
+		name        string
+		configData  string
+		envVars     map[string]string
+		flags       map[string]string
+		expected    map[string]interface{}
+		description string
+	}{
+		{
+			name: "Flag > ENV > File > Default",
+			configData: `[server]
+url = "http://config:8080"
+username = "configuser"
+
+[ui]
+refresh_interval = 10
+theme = "config_theme"`,
+			envVars: map[string]string{
+				"QBT_SERVER_URL":          "http://env:8080",
+				"QBT_SERVER_USERNAME":     "envuser",
+				"QBT_UI_REFRESH_INTERVAL": "20",
+			},
+			flags: map[string]string{
+				"url":      "http://flag:8080",
+				"username": "flaguser",
+			},
+			expected: map[string]interface{}{
+				"server.url":          "http://flag:8080", // Flag wins
+				"server.username":     "flaguser",         // Flag wins
+				"ui.refresh_interval": 20,                 // ENV wins (no flag)
+				"ui.theme":            "config_theme",     // Config wins (no flag, no env)
+			},
+			description: "Flags override env vars and config file",
+		},
+		{
+			name: "ENV > File > Default (no flags)",
+			configData: `[server]
+url = "http://config:8080"
+username = "configuser"
+password = "configpass"
+
+[ui]
+refresh_interval = 10`,
+			envVars: map[string]string{
+				"QBT_SERVER_URL":      "http://env:8080",
+				"QBT_SERVER_USERNAME": "envuser",
+			},
+			flags: map[string]string{},
+			expected: map[string]interface{}{
+				"server.url":          "http://env:8080", // ENV wins
+				"server.username":     "envuser",         // ENV wins
+				"server.password":     "configpass",      // Config wins (no env)
+				"ui.refresh_interval": 10,                // Config wins (no env)
+				"ui.theme":            "default",         // Default wins (no config, no env)
+			},
+			description: "ENV vars override config file when no flags present",
+		},
+		{
+			name: "File > Default (no flags, no env)",
+			configData: `[server]
+url = "http://config:8080"
+
+[ui]
+refresh_interval = 15`,
+			envVars: map[string]string{},
+			flags:   map[string]string{},
+			expected: map[string]interface{}{
+				"server.url":          "http://config:8080", // Config wins
+				"ui.refresh_interval": 15,                   // Config wins
+				"ui.theme":            "default",            // Default wins
+			},
+			description: "Config file values used when no flags or env vars",
+		},
+		{
+			name:       "Defaults only",
+			configData: "",
+			envVars:    map[string]string{},
+			flags:      map[string]string{},
+			expected: map[string]interface{}{
+				"ui.refresh_interval": 3,         // Default
+				"ui.theme":            "default", // Default
+			},
+			description: "Default values used when nothing else provided",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Reset()
+
+			// Set env vars
+			for k, v := range tt.envVars {
+				os.Setenv(k, v)
+				defer os.Unsetenv(k)
+			}
+
+			// Create temp config file if needed
+			var tmpDir string
+			if tt.configData != "" {
+				tmpDir = t.TempDir()
+				configFile := filepath.Join(tmpDir, "config.toml")
+				err := os.WriteFile(configFile, []byte(tt.configData), 0644)
+				require.NoError(t, err)
+
+				oldDir, _ := os.Getwd()
+				os.Chdir(tmpDir)
+				defer os.Chdir(oldDir)
+			}
+
+			// Create a mock command with flags if needed
+			var cmd *cobra.Command
+			if len(tt.flags) > 0 {
+				cmd = &cobra.Command{}
+				cmd.Flags().String("url", "", "")
+				cmd.Flags().String("username", "", "")
+				cmd.Flags().String("password", "", "")
+				cmd.Flags().Int("refresh", 0, "")
+				cmd.Flags().String("theme", "", "")
+
+				// Set flag values
+				for flag, value := range tt.flags {
+					cmd.Flags().Set(flag, value)
+				}
+			}
+
+			// Load config
+			cfg, err := Load(cmd)
+
+			// Should only fail if missing required URL
+			if _, hasURL := tt.expected["server.url"]; !hasURL {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "server.url is required")
+				return
+			}
+
+			require.NoError(t, err, tt.description)
+			require.NotNil(t, cfg)
+
+			// Check expected values
+			for key, expectedValue := range tt.expected {
+				switch key {
+				case "server.url":
+					assert.Equal(t, expectedValue, cfg.Server.URL, tt.description)
+				case "server.username":
+					assert.Equal(t, expectedValue, cfg.Server.Username, tt.description)
+				case "server.password":
+					assert.Equal(t, expectedValue, cfg.Server.Password, tt.description)
+				case "ui.refresh_interval":
+					assert.Equal(t, expectedValue, cfg.UI.RefreshInterval, tt.description)
+				case "ui.theme":
+					assert.Equal(t, expectedValue, cfg.UI.Theme, tt.description)
+				}
 			}
 		})
 	}

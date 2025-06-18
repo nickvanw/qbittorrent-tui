@@ -19,7 +19,6 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
-	cookie     string
 }
 
 func NewClient(baseURL string) (*Client, error) {
@@ -71,9 +70,9 @@ func (c *Client) Login(username, password string) error {
 		return fmt.Errorf("invalid username or password")
 	}
 
+	// Check if we got the SID cookie
 	for _, cookie := range c.httpClient.Jar.Cookies(resp.Request.URL) {
 		if cookie.Name == "SID" {
-			c.cookie = cookie.Value
 			return nil
 		}
 	}
@@ -204,9 +203,6 @@ func (c *Client) PauseTorrents(ctx context.Context, hashes []string) error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", c.baseURL)
-	if c.cookie != "" {
-		req.Header.Set("Cookie", c.cookie)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -236,9 +232,6 @@ func (c *Client) ResumeTorrents(ctx context.Context, hashes []string) error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", c.baseURL)
-	if c.cookie != "" {
-		req.Header.Set("Cookie", c.cookie)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -273,9 +266,6 @@ func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFile
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", c.baseURL)
-	if c.cookie != "" {
-		req.Header.Set("Cookie", c.cookie)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -325,9 +315,6 @@ func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Referer", c.baseURL)
-	if c.cookie != "" {
-		req.Header.Set("Cookie", c.cookie)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -355,9 +342,6 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", c.baseURL)
-	if c.cookie != "" {
-		req.Header.Set("Cookie", c.cookie)
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

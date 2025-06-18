@@ -101,7 +101,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $HOME/.config/qbt-tui/config.toml)")
 
 	// Server configuration flags
-	rootCmd.Flags().StringVarP(&serverURL, "url", "u", "", "qBittorrent WebUI URL (required)")
+	rootCmd.Flags().StringVarP(&serverURL, "url", "u", "", "qBittorrent WebUI URL")
 	rootCmd.Flags().StringVar(&username, "username", "", "qBittorrent username")
 	rootCmd.Flags().StringVarP(&password, "password", "p", "", "qBittorrent password")
 
@@ -109,33 +109,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&refreshInt, "refresh", "r", 3, "refresh interval in seconds (default: 3)")
 	rootCmd.Flags().StringVarP(&theme, "theme", "t", "default", "UI theme (default: default)")
 
-	// Bind flags to viper
-	if err := viper.BindPFlag("server.url", rootCmd.Flags().Lookup("url")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error binding server.url flag: %v\n", err)
-		os.Exit(1)
-	}
-	if err := viper.BindPFlag("server.username", rootCmd.Flags().Lookup("username")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error binding server.username flag: %v\n", err)
-		os.Exit(1)
-	}
-	if err := viper.BindPFlag("server.password", rootCmd.Flags().Lookup("password")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error binding server.password flag: %v\n", err)
-		os.Exit(1)
-	}
-	if err := viper.BindPFlag("ui.refresh_interval", rootCmd.Flags().Lookup("refresh")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error binding ui.refresh_interval flag: %v\n", err)
-		os.Exit(1)
-	}
-	if err := viper.BindPFlag("ui.theme", rootCmd.Flags().Lookup("theme")); err != nil {
-		fmt.Fprintf(os.Stderr, "Error binding ui.theme flag: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Mark required flags
-	if err := rootCmd.MarkFlagRequired("url"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error marking url flag as required: %v\n", err)
-		os.Exit(1)
-	}
+	// Note: Flag binding will be handled in config.Load() to ensure proper precedence
 }
 
 func initConfig() {
@@ -146,7 +120,7 @@ func initConfig() {
 
 func run(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.Load(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

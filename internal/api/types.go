@@ -9,7 +9,7 @@ type Torrent struct {
 	UpSpeed          int64   `json:"upspeed"`
 	Priority         int     `json:"priority"`
 	NumSeeds         int     `json:"num_seeds"`
-	NumLeeches       int     `json:"num_leechs"`
+	NumLeeches       int     `json:"num_leechers"`
 	NumComplete      int     `json:"num_complete"`
 	NumIncomplete    int     `json:"num_incomplete"`
 	Ratio            float64 `json:"ratio"`
@@ -18,7 +18,7 @@ type Torrent struct {
 	Category         string  `json:"category"`
 	Tags             string  `json:"tags"`
 	AddedOn          int64   `json:"added_on"`
-	CompletedOn      int64   `json:"completed"`
+	CompletedOn      int64   `json:"completion_on"`
 	Tracker          string  `json:"tracker"`
 	SavePath         string  `json:"save_path"`
 	Downloaded       int64   `json:"downloaded"`
