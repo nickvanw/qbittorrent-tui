@@ -40,6 +40,18 @@ theme = "dark"`,
 			},
 		},
 		{
+			name: "config with columns",
+			configData: `[server]
+url = "http://localhost:8080"
+
+[ui]
+columns = ["name", "size", "status", "down", "up"]`,
+			wantErr: false,
+			validate: func(t *testing.T, cfg *Config) {
+				assert.Equal(t, []string{"name", "size", "status", "down", "up"}, cfg.UI.Columns)
+			},
+		},
+		{
 			name: "env vars override config",
 			configData: `[server]
 url = "http://localhost:8080"
@@ -145,8 +157,9 @@ func TestConfigValidation(t *testing.T) {
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Theme           string   `mapstructure:"theme"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -157,8 +170,9 @@ func TestConfigValidation(t *testing.T) {
 			name: "missing server URL",
 			config: Config{
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Theme           string   `mapstructure:"theme"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -177,8 +191,9 @@ func TestConfigValidation(t *testing.T) {
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Theme           string   `mapstructure:"theme"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 0,
 				},

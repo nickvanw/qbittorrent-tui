@@ -96,6 +96,41 @@ func NewTorrentList() *TorrentList {
 	}
 }
 
+// NewTorrentListWithColumns creates a new torrent list component with custom visible columns
+func NewTorrentListWithColumns(columns []string) *TorrentList {
+	visibleCols := columns
+	if len(visibleCols) == 0 {
+		visibleCols = append([]string{}, defaultVisibleColumns...)
+	}
+
+	// Validate that all columns exist
+	validCols := make([]string, 0, len(visibleCols))
+	for _, col := range visibleCols {
+		for _, availCol := range allColumns {
+			if col == availCol.Key {
+				validCols = append(validCols, col)
+				break
+			}
+		}
+	}
+
+	// If no valid columns, use defaults
+	if len(validCols) == 0 {
+		validCols = append([]string{}, defaultVisibleColumns...)
+	}
+
+	return &TorrentList{
+		torrents:       []api.Torrent{},
+		showProgress:   true,
+		visibleColumns: validCols,
+		sortConfig: SortConfig{
+			Column:    "name",  // Default sort by name
+			Direction: SortAsc, // Ascending
+			Secondary: "size",  // Secondary sort by size
+		},
+	}
+}
+
 // SetTorrents updates the torrent list and applies sorting
 func (t *TorrentList) SetTorrents(torrents []api.Torrent) {
 	t.torrents = torrents

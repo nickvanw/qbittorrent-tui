@@ -18,8 +18,9 @@ type Config struct {
 	} `mapstructure:"server"`
 
 	UI struct {
-		RefreshInterval int    `mapstructure:"refresh_interval"`
-		Theme           string `mapstructure:"theme"`
+		RefreshInterval int      `mapstructure:"refresh_interval"`
+		Theme           string   `mapstructure:"theme"`
+		Columns         []string `mapstructure:"columns"`
 	} `mapstructure:"ui"`
 }
 
@@ -46,6 +47,7 @@ func Load(cmd *cobra.Command) (*Config, error) {
 	viper.BindEnv("server.password", "QBT_SERVER_PASSWORD")
 	viper.BindEnv("ui.refresh_interval", "QBT_UI_REFRESH_INTERVAL")
 	viper.BindEnv("ui.theme", "QBT_UI_THEME")
+	viper.BindEnv("ui.columns", "QBT_UI_COLUMNS")
 
 	// Read config file if it exists
 	if err := viper.ReadInConfig(); err != nil {

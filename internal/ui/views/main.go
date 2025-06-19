@@ -227,7 +227,7 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 	return &MainView{
 		config:         cfg,
 		apiClient:      client,
-		torrentList:    components.NewTorrentList(),
+		torrentList:    components.NewTorrentListWithColumns(cfg.UI.Columns),
 		statsPanel:     components.NewStatsPanel(),
 		filterPanel:    components.NewFilterPanel(),
 		torrentDetails: components.NewTorrentDetails(client),
