@@ -717,8 +717,8 @@ func (m *MainView) View() string {
 	helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
 	contentHeight := m.height - helpHeight - 1
 
-	// Stats panel height (fixed)
-	statsHeight := 5
+	// Stats panel height (fixed) - needs room for title + 3-line content + borders + padding
+	statsHeight := 7
 
 	// Filter panel height (fixed)
 	filterHeight := 3
@@ -734,7 +734,7 @@ func (m *MainView) View() string {
 			return m.renderMinimalView()
 		}
 		// Reduce panel heights
-		statsHeight = 3
+		statsHeight = 4  // Still need minimum space for stats
 		filterHeight = 2
 		torrentListHeight = contentHeight - statsHeight - filterHeight - 2
 	}
@@ -742,37 +742,16 @@ func (m *MainView) View() string {
 	// Create the layout
 	var sections []string
 
-	// Create each panel ensuring they don't exceed terminal width
 	// Stats panel at the top
 	statsView := m.renderStatsPanel(m.width, statsHeight)
-	// Ensure each line doesn't exceed terminal width
-	// We need to check the actual byte length after ANSI stripping
-	lines := strings.Split(statsView, "\n")
-	for i := range lines {
-		// Strip trailing spaces first
-		lines[i] = strings.TrimRight(lines[i], " ")
-	}
-	statsView = strings.Join(lines, "\n")
 	sections = append(sections, statsView)
 
 	// Torrent list in the middle
 	torrentView := m.renderTorrentList(m.width, torrentListHeight)
-	// Strip trailing spaces
-	lines = strings.Split(torrentView, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " ")
-	}
-	torrentView = strings.Join(lines, "\n")
 	sections = append(sections, torrentView)
 
 	// Filter panel at the bottom
 	filterView := m.renderFilterPanel(m.width, filterHeight)
-	// Strip trailing spaces
-	lines = strings.Split(filterView, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " ")
-	}
-	filterView = strings.Join(lines, "\n")
 	sections = append(sections, filterView)
 
 	// Status line at the very bottom - priority: error (red) > success (green) > help
@@ -792,33 +771,7 @@ func (m *MainView) View() string {
 
 	sections = append(sections, statusView)
 
-	// Join sections manually to avoid unwanted padding
-	var output strings.Builder
-	for i, section := range sections {
-		if i > 0 {
-			output.WriteString("\n")
-		}
-		// Ensure each line in the section doesn't exceed terminal width
-		lines := strings.Split(section, "\n")
-		for j, line := range lines {
-			if j > 0 {
-				output.WriteString("\n")
-			}
-			// Trim any trailing spaces that might have been added
-			trimmed := strings.TrimRight(line, " ")
-			// Use lipgloss.Width to check actual display width
-			if lipgloss.Width(trimmed) > m.width {
-				// This line is too wide, we need to truncate it properly
-				// However, we can't use styles.TruncateString directly because
-				// it doesn't handle ANSI codes. For now, just leave it as is
-				// since our panels should already be correctly sized.
-				// If this happens, it's a bug in panel rendering.
-			}
-			output.WriteString(trimmed)
-		}
-	}
-
-	mainContent := output.String()
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	// Overlay dialogs if active (add torrent has priority)
 	if m.showAddDialog {
@@ -837,169 +790,56 @@ func (m *MainView) View() string {
 
 // renderStatsPanel renders the stats panel
 func (m *MainView) renderStatsPanel(width, height int) string {
-	// We need to work within the exact terminal width
-	// First, let's calculate how much space we have for content
-	// Border takes 2 chars, padding takes 4 chars (2 on each side)
-	maxContentWidth := width - 2 - 4 // border - padding
-
-	if maxContentWidth < 10 {
-		// Terminal too narrow, render minimal view
-		return lipgloss.NewStyle().Width(width).Render("...")
-	}
+	style := styles.PanelStyle
 
 	// Set dimensions for the stats panel component
-	m.statsPanel.SetDimensions(maxContentWidth, height-2)
+	m.statsPanel.SetDimensions(width-6, height-4)
+
 	content := m.statsPanel.View()
-
-	// Ensure each line fits within maxContentWidth
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		if lipgloss.Width(line) > maxContentWidth {
-			lines[i] = styles.TruncateString(line, maxContentWidth)
-		}
-	}
-	content = strings.Join(lines, "\n")
-
-	// Create a box that's exactly the right size for the content
-	// Don't set width on the content style - let it be natural
-	contentBox := lipgloss.NewStyle().
-		MaxWidth(maxContentWidth).
-		Render(content)
-
-	// Now apply the panel styling
-	// The key is to NOT set a width on the panel style
-	panel := styles.PanelStyle.Copy().
-		UnsetWidth().
-		UnsetMaxWidth().
-		Render(contentBox)
-
-	// Verify the final width and truncate if needed
-	if lipgloss.Width(panel) > width {
-		// This shouldn't happen, but as a safety measure
-		lines := strings.Split(panel, "\n")
-		for i, line := range lines {
-			if len(line) > width {
-				lines[i] = line[:width]
-			}
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	return panel
+	return style.Width(width).Height(height).Render(content)
 }
 
 // renderTorrentList renders the torrent list (always focused)
 func (m *MainView) renderTorrentList(width, height int) string {
-	// We need to work within the exact terminal width
-	// First, let's calculate how much space we have for content
-	// Border takes 2 chars, padding takes 4 chars (2 on each side)
-	maxContentWidth := width - 2 - 4 // border - padding
-
-	if maxContentWidth < 10 {
-		// Terminal too narrow, render minimal view
-		return lipgloss.NewStyle().Width(width).Render("...")
-	}
+	style := styles.FocusedPanelStyle // Always focused
 
 	// Set dimensions for the torrent list component
-	m.torrentList.SetDimensions(maxContentWidth, height-2)
-	content := m.torrentList.View()
+	// Account for panel borders (2) and padding (4 horizontal, 2 vertical)
+	m.torrentList.SetDimensions(width-6, height-4)
 
-	// Ensure each line fits within maxContentWidth
+	content := m.torrentList.View()
+	
+	// Apply ANSI-preserving truncation for narrow windows
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		lineWidth := lipgloss.Width(line)
-		if lineWidth > maxContentWidth {
-			// The torrent list is producing lines that are too wide
-			// This shouldn't happen if SetDimensions is working correctly
-			// For safety, truncate to fit
-			lines[i] = truncateLine(line, maxContentWidth)
+		if lipgloss.Width(line) > width-6 {
+			lines[i] = truncateLine(line, width-6)
 		}
 	}
 	content = strings.Join(lines, "\n")
-
-	// Create a box that's exactly the right size for the content
-	// Don't set width on the content style - let it be natural
-	contentBox := lipgloss.NewStyle().
-		MaxWidth(maxContentWidth).
-		Render(content)
-
-	// Now apply the panel styling
-	// The key is to NOT set a width on the panel style
-	panel := styles.FocusedPanelStyle.Copy().
-		UnsetWidth().
-		UnsetMaxWidth().
-		Render(contentBox)
-
-	// Verify the final width and truncate if needed
-	if lipgloss.Width(panel) > width {
-		// This shouldn't happen, but as a safety measure
-		lines := strings.Split(panel, "\n")
-		for i, line := range lines {
-			if len(line) > width {
-				lines[i] = line[:width]
-			}
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	return panel
+	
+	return style.Width(width).Height(height).Render(content)
 }
 
 // renderFilterPanel renders the filter panel
 func (m *MainView) renderFilterPanel(width, height int) string {
-	// We need to work within the exact terminal width
-	// First, let's calculate how much space we have for content
-	// Border takes 2 chars, padding takes 4 chars (2 on each side)
-	maxContentWidth := width - 2 - 4 // border - padding
-
-	if maxContentWidth < 10 {
-		// Terminal too narrow, render minimal view
-		return lipgloss.NewStyle().Width(width).Render("...")
-	}
+	style := styles.PanelStyle
 
 	// Set dimensions for the filter panel component
-	m.filterPanel.SetDimensions(maxContentWidth, height-2)
-	content := m.filterPanel.View()
+	m.filterPanel.SetDimensions(width-6, height-4)
 
-	// Ensure each line fits within maxContentWidth
+	content := m.filterPanel.View()
+	
+	// Apply ANSI-preserving truncation for narrow windows
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		lineWidth := lipgloss.Width(line)
-		if lineWidth > maxContentWidth {
-			// The filter panel is producing lines that are too wide
-			// This shouldn't happen if SetDimensions is working correctly
-			// For safety, truncate to fit
-			lines[i] = truncateLine(line, maxContentWidth)
+		if lipgloss.Width(line) > width-6 {
+			lines[i] = truncateLine(line, width-6)
 		}
 	}
 	content = strings.Join(lines, "\n")
-
-	// Create a box that's exactly the right size for the content
-	// Don't set width on the content style - let it be natural
-	contentBox := lipgloss.NewStyle().
-		MaxWidth(maxContentWidth).
-		Render(content)
-
-	// Now apply the panel styling
-	// The key is to NOT set a width on the panel style
-	panel := styles.PanelStyle.Copy().
-		UnsetWidth().
-		UnsetMaxWidth().
-		Render(contentBox)
-
-	// Verify the final width and truncate if needed
-	if lipgloss.Width(panel) > width {
-		// This shouldn't happen, but as a safety measure
-		lines := strings.Split(panel, "\n")
-		for i, line := range lines {
-			if len(line) > width {
-				lines[i] = line[:width]
-			}
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	return panel
+	
+	return style.Width(width).Height(height).Render(content)
 }
 
 // updateDimensions updates component dimensions based on window size

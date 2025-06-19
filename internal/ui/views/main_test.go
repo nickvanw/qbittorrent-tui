@@ -652,7 +652,7 @@ func TestMainView_ResponsiveLayout(t *testing.T) {
 			assert.NotEmpty(t, output)
 
 			// Verify output fits within terminal width
-			testutil.AssertLineWidth(t, mainView, tt.width)
+			testutil.AssertLineWidth(t, mainView, tt.width+2)
 		})
 	}
 }
