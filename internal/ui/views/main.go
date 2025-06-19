@@ -96,16 +96,17 @@ type MainView struct {
 	help           help.Model
 
 	// State
-	torrents      []api.Torrent
-	allTorrents   []api.Torrent // unfiltered torrents
-	stats         *api.GlobalStats
-	categories    map[string]interface{}
-	tags          []string
-	currentFilter filter.Filter
-	viewMode      ViewMode
-	lastError     error
-	lastSuccess   string
-	isLoading     bool
+	torrents        []api.Torrent
+	allTorrents     []api.Torrent // unfiltered torrents
+	stats           *api.GlobalStats
+	categories      map[string]interface{}
+	tags            []string
+	currentFilter   filter.Filter
+	viewMode        ViewMode
+	detailsViewHash string // Hash of torrent currently being viewed in details
+	lastError       error
+	lastSuccess     string
+	isLoading       bool
 
 	// Delete confirmation dialog state
 	showDeleteDialog bool
@@ -357,15 +358,21 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Don't auto-clear errors here - let timer handle it
 
 		// Update torrent details if currently viewing a torrent
-		if m.viewMode == ViewModeDetails {
-			selectedHash := m.torrentList.GetSelectedHash()
-			if selectedHash != "" {
-				for _, torrent := range m.torrents {
-					if torrent.Hash == selectedHash {
-						m.torrentDetails.UpdateTorrent(&torrent)
-						break
-					}
+		if m.viewMode == ViewModeDetails && m.detailsViewHash != "" {
+			// Search in ALL torrents (not just filtered ones)
+			torrentFound := false
+			for _, torrent := range m.allTorrents {
+				if torrent.Hash == m.detailsViewHash {
+					m.torrentDetails.UpdateTorrent(&torrent)
+					torrentFound = true
+					break
 				}
+			}
+
+			// If torrent no longer exists (deleted), exit details mode
+			if !torrentFound {
+				m.viewMode = ViewModeMain
+				m.detailsViewHash = ""
 			}
 		}
 
@@ -552,6 +559,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Escape):
 			if m.viewMode == ViewModeDetails {
 				m.viewMode = ViewModeMain
+				m.detailsViewHash = "" // Clear details view tracking
 			} else if m.viewMode == ViewModeMain {
 				// Let filter panel handle escape to exit search mode
 				// Note: column config mode escape is handled earlier in the key hierarchy
@@ -575,6 +583,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							cmd = m.torrentDetails.SetTorrent(&torrent)
 							cmds = append(cmds, cmd)
 							m.viewMode = ViewModeDetails
+							m.detailsViewHash = selectedHash // Track which torrent we're viewing
 							break
 						}
 					}
