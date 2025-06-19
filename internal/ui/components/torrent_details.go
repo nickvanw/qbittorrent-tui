@@ -181,6 +181,14 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 			// Cycle through tabs
 			t.activeTab = (t.activeTab + 1) % 4
 			t.scroll = 0
+		case msg.Type == tea.KeyShiftTab:
+			// Reverse cycle through tabs
+			if t.activeTab == TabGeneral {
+				t.activeTab = TabFiles
+			} else {
+				t.activeTab--
+			}
+			t.scroll = 0
 
 		// Scrolling
 		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
@@ -192,6 +200,30 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("g"))):
 			t.scroll = 0
 		case key.Matches(msg, key.NewBinding(key.WithKeys("G"))):
+			maxScroll := t.getMaxScroll()
+			if maxScroll > 0 {
+				t.scroll = maxScroll
+			}
+		case msg.Type == tea.KeyPgDown:
+			// Page down - scroll by page size (height - 10 for headers/footers)
+			pageSize := t.height - 10
+			if pageSize < 1 {
+				pageSize = 1
+			}
+			t.scroll += pageSize
+		case msg.Type == tea.KeyPgUp:
+			// Page up - scroll by page size
+			pageSize := t.height - 10
+			if pageSize < 1 {
+				pageSize = 1
+			}
+			t.scroll -= pageSize
+			if t.scroll < 0 {
+				t.scroll = 0
+			}
+		case msg.Type == tea.KeyHome:
+			t.scroll = 0
+		case msg.Type == tea.KeyEnd:
 			maxScroll := t.getMaxScroll()
 			if maxScroll > 0 {
 				t.scroll = maxScroll
@@ -638,7 +670,15 @@ func (t *TorrentDetails) renderPathInfo() string {
 	var lines []string
 
 	lines = append(lines, styles.SubtitleStyle.Render("Files and Paths"))
-	lines = append(lines, fmt.Sprintf("Save Path: %s", t.torrent.SavePath))
+
+	// Use save path from properties if available, otherwise fall back to torrent
+	savePath := ""
+	if t.properties != nil && t.properties.SavePath != "" {
+		savePath = t.properties.SavePath
+	} else {
+		savePath = t.torrent.SavePath
+	}
+	lines = append(lines, fmt.Sprintf("Save Path: %s", savePath))
 
 	if t.torrent.Tracker != "" {
 		lines = append(lines, fmt.Sprintf("Tracker: %s", t.torrent.Tracker))

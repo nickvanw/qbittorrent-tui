@@ -189,6 +189,11 @@ func (t *TorrentList) Update(msg tea.Msg) (*TorrentList, tea.Cmd) {
 
 // View renders the torrent list
 func (t *TorrentList) View() string {
+	// Show column config overlay if enabled (regardless of torrent count)
+	if t.showConfig {
+		return t.renderWithColumnConfig()
+	}
+
 	if len(t.torrents) == 0 {
 		return styles.DimStyle.Render("No torrents")
 	}
@@ -225,14 +230,7 @@ func (t *TorrentList) View() string {
 		}
 	}
 
-	listView := s.String()
-
-	// Show column config overlay if enabled
-	if t.showConfig {
-		return t.renderWithColumnConfig()
-	}
-
-	return listView
+	return s.String()
 }
 
 // renderHeader renders the table header with sort indicators

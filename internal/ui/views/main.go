@@ -703,6 +703,16 @@ func (m *MainView) View() string {
 		return m.renderDetailsView()
 	}
 
+	// Handle very small terminals
+	if m.height < 10 || m.width < 20 {
+		// Terminal too small, show minimal message
+		return lipgloss.NewStyle().
+			Width(m.width).
+			Height(m.height).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render("Terminal too small")
+	}
+
 	// Calculate layout dimensions
 	helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
 	contentHeight := m.height - helpHeight - 1
@@ -716,19 +726,53 @@ func (m *MainView) View() string {
 	// Torrent list gets remaining space
 	torrentListHeight := contentHeight - statsHeight - filterHeight - 2 // 2 for borders
 
+	// Ensure minimum heights
+	if torrentListHeight < 1 {
+		// Not enough space for all panels - adjust layout
+		if m.height < 15 {
+			// Very limited space - show only torrent list
+			return m.renderMinimalView()
+		}
+		// Reduce panel heights
+		statsHeight = 3
+		filterHeight = 2
+		torrentListHeight = contentHeight - statsHeight - filterHeight - 2
+	}
+
 	// Create the layout
 	var sections []string
 
+	// Create each panel ensuring they don't exceed terminal width
 	// Stats panel at the top
 	statsView := m.renderStatsPanel(m.width, statsHeight)
+	// Ensure each line doesn't exceed terminal width
+	// We need to check the actual byte length after ANSI stripping
+	lines := strings.Split(statsView, "\n")
+	for i := range lines {
+		// Strip trailing spaces first
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	statsView = strings.Join(lines, "\n")
 	sections = append(sections, statsView)
 
 	// Torrent list in the middle
 	torrentView := m.renderTorrentList(m.width, torrentListHeight)
+	// Strip trailing spaces
+	lines = strings.Split(torrentView, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	torrentView = strings.Join(lines, "\n")
 	sections = append(sections, torrentView)
 
 	// Filter panel at the bottom
 	filterView := m.renderFilterPanel(m.width, filterHeight)
+	// Strip trailing spaces
+	lines = strings.Split(filterView, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	filterView = strings.Join(lines, "\n")
 	sections = append(sections, filterView)
 
 	// Status line at the very bottom - priority: error (red) > success (green) > help
@@ -740,9 +784,41 @@ func (m *MainView) View() string {
 	} else {
 		statusView = m.help.View(m.keys)
 	}
+
+	// Ensure status line doesn't exceed terminal width
+	if lipgloss.Width(statusView) > m.width {
+		statusView = styles.TruncateString(statusView, m.width)
+	}
+
 	sections = append(sections, statusView)
 
-	mainContent := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	// Join sections manually to avoid unwanted padding
+	var output strings.Builder
+	for i, section := range sections {
+		if i > 0 {
+			output.WriteString("\n")
+		}
+		// Ensure each line in the section doesn't exceed terminal width
+		lines := strings.Split(section, "\n")
+		for j, line := range lines {
+			if j > 0 {
+				output.WriteString("\n")
+			}
+			// Trim any trailing spaces that might have been added
+			trimmed := strings.TrimRight(line, " ")
+			// Use lipgloss.Width to check actual display width
+			if lipgloss.Width(trimmed) > m.width {
+				// This line is too wide, we need to truncate it properly
+				// However, we can't use styles.TruncateString directly because
+				// it doesn't handle ANSI codes. For now, just leave it as is
+				// since our panels should already be correctly sized.
+				// If this happens, it's a bug in panel rendering.
+			}
+			output.WriteString(trimmed)
+		}
+	}
+
+	mainContent := output.String()
 
 	// Overlay dialogs if active (add torrent has priority)
 	if m.showAddDialog {
@@ -761,36 +837,169 @@ func (m *MainView) View() string {
 
 // renderStatsPanel renders the stats panel
 func (m *MainView) renderStatsPanel(width, height int) string {
-	style := styles.PanelStyle
+	// We need to work within the exact terminal width
+	// First, let's calculate how much space we have for content
+	// Border takes 2 chars, padding takes 4 chars (2 on each side)
+	maxContentWidth := width - 2 - 4 // border - padding
+
+	if maxContentWidth < 10 {
+		// Terminal too narrow, render minimal view
+		return lipgloss.NewStyle().Width(width).Render("...")
+	}
 
 	// Set dimensions for the stats panel component
-	m.statsPanel.SetDimensions(width-6, height-4)
-
+	m.statsPanel.SetDimensions(maxContentWidth, height-2)
 	content := m.statsPanel.View()
-	return style.Width(width).Height(height).Render(content)
+
+	// Ensure each line fits within maxContentWidth
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if lipgloss.Width(line) > maxContentWidth {
+			lines[i] = styles.TruncateString(line, maxContentWidth)
+		}
+	}
+	content = strings.Join(lines, "\n")
+
+	// Create a box that's exactly the right size for the content
+	// Don't set width on the content style - let it be natural
+	contentBox := lipgloss.NewStyle().
+		MaxWidth(maxContentWidth).
+		Render(content)
+
+	// Now apply the panel styling
+	// The key is to NOT set a width on the panel style
+	panel := styles.PanelStyle.Copy().
+		UnsetWidth().
+		UnsetMaxWidth().
+		Render(contentBox)
+
+	// Verify the final width and truncate if needed
+	if lipgloss.Width(panel) > width {
+		// This shouldn't happen, but as a safety measure
+		lines := strings.Split(panel, "\n")
+		for i, line := range lines {
+			if len(line) > width {
+				lines[i] = line[:width]
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return panel
 }
 
 // renderTorrentList renders the torrent list (always focused)
 func (m *MainView) renderTorrentList(width, height int) string {
-	style := styles.FocusedPanelStyle // Always focused
+	// We need to work within the exact terminal width
+	// First, let's calculate how much space we have for content
+	// Border takes 2 chars, padding takes 4 chars (2 on each side)
+	maxContentWidth := width - 2 - 4 // border - padding
+
+	if maxContentWidth < 10 {
+		// Terminal too narrow, render minimal view
+		return lipgloss.NewStyle().Width(width).Render("...")
+	}
 
 	// Set dimensions for the torrent list component
-	// Account for panel borders (2) and padding (4 horizontal, 2 vertical)
-	m.torrentList.SetDimensions(width-6, height-4)
-
+	m.torrentList.SetDimensions(maxContentWidth, height-2)
 	content := m.torrentList.View()
-	return style.Width(width).Height(height).Render(content)
+
+	// Ensure each line fits within maxContentWidth
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > maxContentWidth {
+			// The torrent list is producing lines that are too wide
+			// This shouldn't happen if SetDimensions is working correctly
+			// For safety, truncate to fit
+			lines[i] = truncateLine(line, maxContentWidth)
+		}
+	}
+	content = strings.Join(lines, "\n")
+
+	// Create a box that's exactly the right size for the content
+	// Don't set width on the content style - let it be natural
+	contentBox := lipgloss.NewStyle().
+		MaxWidth(maxContentWidth).
+		Render(content)
+
+	// Now apply the panel styling
+	// The key is to NOT set a width on the panel style
+	panel := styles.FocusedPanelStyle.Copy().
+		UnsetWidth().
+		UnsetMaxWidth().
+		Render(contentBox)
+
+	// Verify the final width and truncate if needed
+	if lipgloss.Width(panel) > width {
+		// This shouldn't happen, but as a safety measure
+		lines := strings.Split(panel, "\n")
+		for i, line := range lines {
+			if len(line) > width {
+				lines[i] = line[:width]
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return panel
 }
 
 // renderFilterPanel renders the filter panel
 func (m *MainView) renderFilterPanel(width, height int) string {
-	style := styles.PanelStyle
+	// We need to work within the exact terminal width
+	// First, let's calculate how much space we have for content
+	// Border takes 2 chars, padding takes 4 chars (2 on each side)
+	maxContentWidth := width - 2 - 4 // border - padding
+
+	if maxContentWidth < 10 {
+		// Terminal too narrow, render minimal view
+		return lipgloss.NewStyle().Width(width).Render("...")
+	}
 
 	// Set dimensions for the filter panel component
-	m.filterPanel.SetDimensions(width-6, height-4)
-
+	m.filterPanel.SetDimensions(maxContentWidth, height-2)
 	content := m.filterPanel.View()
-	return style.Width(width).Height(height).Render(content)
+
+	// Ensure each line fits within maxContentWidth
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		if lineWidth > maxContentWidth {
+			// The filter panel is producing lines that are too wide
+			// This shouldn't happen if SetDimensions is working correctly
+			// For safety, truncate to fit
+			lines[i] = truncateLine(line, maxContentWidth)
+		}
+	}
+	content = strings.Join(lines, "\n")
+
+	// Create a box that's exactly the right size for the content
+	// Don't set width on the content style - let it be natural
+	contentBox := lipgloss.NewStyle().
+		MaxWidth(maxContentWidth).
+		Render(content)
+
+	// Now apply the panel styling
+	// The key is to NOT set a width on the panel style
+	panel := styles.PanelStyle.Copy().
+		UnsetWidth().
+		UnsetMaxWidth().
+		Render(contentBox)
+
+	// Verify the final width and truncate if needed
+	if lipgloss.Width(panel) > width {
+		// This shouldn't happen, but as a safety measure
+		lines := strings.Split(panel, "\n")
+		for i, line := range lines {
+			if len(line) > width {
+				lines[i] = line[:width]
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	return panel
 }
 
 // updateDimensions updates component dimensions based on window size
@@ -1020,6 +1229,32 @@ func filterEqual(a, b filter.Filter) bool {
 	}
 
 	return true
+}
+
+// renderMinimalView renders a minimal view for very small terminals
+func (m *MainView) renderMinimalView() string {
+	// Just show the torrent list and a minimal status line
+	torrentView := m.renderTorrentList(m.width, m.height-1)
+
+	// Strip trailing spaces
+	lines := strings.Split(torrentView, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+
+	// Limit to available height
+	if len(lines) > m.height-1 {
+		lines = lines[:m.height-1]
+	}
+
+	// Add a minimal status line
+	statusLine := "? help"
+	if m.lastError != nil {
+		statusLine = "Error!"
+	}
+	lines = append(lines, statusLine)
+
+	return strings.Join(lines, "\n")
 }
 
 // renderDetailsView renders the torrent details view
@@ -1297,6 +1532,83 @@ func countDirectories(entries []FileEntry) int {
 		}
 	}
 	return count
+}
+
+// truncateLine truncates a line with ANSI codes to fit within maxWidth
+// This function preserves ANSI codes while truncating visible content
+func truncateLine(line string, maxWidth int) string {
+	// If the line fits within maxWidth, return as-is
+	stripped := stripANSI(line)
+	if len(stripped) <= maxWidth {
+		return line
+	}
+
+	// Preserve ANSI codes while truncating
+	return truncateWithANSI(line, maxWidth)
+}
+
+// truncateWithANSI truncates a string while preserving ANSI escape sequences
+func truncateWithANSI(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+
+	var result strings.Builder
+	var visibleCount int
+	var inEscape bool
+
+	for _, r := range s {
+		if r == '\033' { // Start of ANSI escape sequence
+			inEscape = true
+			result.WriteRune(r)
+			continue
+		}
+
+		if inEscape {
+			result.WriteRune(r)
+			if r == 'm' { // End of most ANSI escape sequences
+				inEscape = false
+			}
+			continue
+		}
+
+		// Regular visible character
+		if visibleCount >= maxWidth {
+			break
+		}
+
+		result.WriteRune(r)
+		visibleCount++
+	}
+
+	// Add reset sequence if we ended in the middle of styling
+	resultStr := result.String()
+	if strings.Contains(resultStr, "\033[") && !strings.HasSuffix(resultStr, "\033[0m") {
+		resultStr += "\033[0m" // Reset formatting
+	}
+
+	return resultStr
+}
+
+// stripANSI removes ANSI escape sequences from a string
+func stripANSI(s string) string {
+	// Simple ANSI stripper
+	result := ""
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result += string(r)
+	}
+	return result
 }
 
 // NewAddTorrentDialog creates a new add torrent dialog

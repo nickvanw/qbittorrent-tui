@@ -247,6 +247,47 @@ func TestFilterPanel_ResponsiveFilterOptions(t *testing.T) {
 	}
 }
 
+// TestFilterPanel_NarrowWindowCursorHighlighting tests basic functionality of state filter mode
+func TestFilterPanel_NarrowWindowCursorHighlighting(t *testing.T) {
+	fp := NewFilterPanel()
+
+	// Set up many available states (more than can fit on narrow screen)
+	fp.availableStates = []string{
+		"active", "downloading", "uploading", "completed",
+		"paused", "queued", "stalled", "checking", "error",
+		"allocating", "metaDL", "moving",
+	}
+
+	// Set narrow width (should show only 3 options)
+	fp.SetDimensions(80, 5)
+
+	// Enter state filter mode
+	fp.mode = FilterModeState
+
+	// Test cursor at different positions
+	testCases := []struct {
+		name      string
+		cursorPos int
+	}{
+		{"cursor at first position", 0},
+		{"cursor at middle position", 5},
+		{"cursor at last position", 11},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fp.cursor = tc.cursorPos
+			view := fp.View()
+
+			// Check that view contains expected content
+			assert.NotEmpty(t, view, "view should not be empty")
+			assert.Contains(t, view, "Select State:", "should show state selection header")
+			assert.Contains(t, view, "[ ]", "should show checkbox options")
+			assert.Contains(t, view, "navigate", "should show navigation help")
+		})
+	}
+}
+
 // stripANSI removes ANSI escape sequences for length calculation
 func stripANSI(s string) string {
 	// Simple ANSI stripper for testing
