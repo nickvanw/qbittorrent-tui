@@ -87,9 +87,9 @@ func TestClientIntegration(t *testing.T) {
 		stats, err := client.GetGlobalStats(ctx)
 		if assert.NoError(t, err) {
 			assert.NotNil(t, stats)
-			assert.GreaterOrEqual(t, stats.NumTorrents, 0)
-			t.Logf("Stats: %d torrents, DL: %d B/s, UP: %d B/s",
-				stats.NumTorrents, stats.DlInfoSpeed, stats.UpInfoSpeed)
+			assert.GreaterOrEqual(t, stats.DlInfoSpeed, int64(0))
+			t.Logf("Stats: DL: %d B/s, UP: %d B/s, DHT: %d nodes",
+				stats.DlInfoSpeed, stats.UpInfoSpeed, stats.DHTNodes)
 		}
 	})
 
