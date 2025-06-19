@@ -30,7 +30,7 @@ var (
 	PanelStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(DimTextColor).
-			Padding(1, 2)
+			Padding(1, 2, 0, 2)
 
 	FocusedPanelStyle = PanelStyle.
 				BorderForeground(PrimaryColor)

@@ -262,10 +262,10 @@ func TestClientGetTorrents(t *testing.T) {
 
 func TestClientGetGlobalStats(t *testing.T) {
 	mockStats := &GlobalStats{
-		DlInfoSpeed:    1024 * 1024,
-		UpInfoSpeed:    512 * 1024,
-		NumTorrents:    10,
-		NumActiveItems: 3,
+		DlInfoSpeed:      1024 * 1024,
+		UpInfoSpeed:      512 * 1024,
+		ConnectionStatus: "connected",
+		DHTNodes:         150,
 	}
 
 	tests := []struct {
@@ -328,7 +328,7 @@ func TestClientGetGlobalStats(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, mockStats.DlInfoSpeed, stats.DlInfoSpeed)
-				assert.Equal(t, mockStats.NumTorrents, stats.NumTorrents)
+				assert.Equal(t, mockStats.ConnectionStatus, stats.ConnectionStatus)
 			}
 		})
 	}

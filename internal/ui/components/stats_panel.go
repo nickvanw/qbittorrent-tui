@@ -127,9 +127,8 @@ func (s *StatsPanel) renderSessionStats() string {
 
 	lines = append(lines, styles.SubtitleStyle.Render("Session"))
 
-	// Active torrents
-	activeTorrents := fmt.Sprintf("Active: %d torrents", s.stats.TorrentsCount)
-	lines = append(lines, activeTorrents)
+	// Note: Torrent counts removed - not available from qBittorrent API
+	// Would need to be calculated from torrent list if needed
 
 	// Free space
 	freeSpace := styles.FormatBytes(s.stats.FreeSpaceOnDisk)

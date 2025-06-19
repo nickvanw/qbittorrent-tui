@@ -30,6 +30,15 @@ go test ./...  # Unit tests
 - **TUI components** (`internal/ui/components/`) - Bubble Tea UI components
 - **Configuration** (`internal/config/`) - TOML config management
 
+### qBittorrent API Reference
+- **Official API Documentation**: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-5.0)
+- **Key endpoints used**:
+  - `/api/v2/auth/login` - Authentication
+  - `/api/v2/torrents/info` - Get torrent list
+  - `/api/v2/transfer/info` - Get global transfer statistics (speeds, data transferred, DHT nodes, connection status)
+  - `/api/v2/sync/maindata` - Get server state including free disk space
+- **Note**: Torrent counts are not provided by the API - must be calculated from torrent list
+
 ### Key Features Implemented
 - ✅ **Responsive layout** - Dynamic column sizing based on terminal width
 - ✅ **Torrent sorting** - Sort by any column with keyboard shortcuts (1-9)

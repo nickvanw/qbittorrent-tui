@@ -763,8 +763,8 @@ func (m *MainView) View() string {
 func (m *MainView) renderStatsPanel(width, height int) string {
 	style := styles.PanelStyle
 
-	// Set dimensions for the stats panel component
-	m.statsPanel.SetDimensions(width-6, height-4)
+	// Fixed dimensions: stats panel is always 5 lines tall
+	m.statsPanel.SetDimensions(width-6, 2) // 5 total - 3 for borders/padding = 2 content
 
 	content := m.statsPanel.View()
 	return style.Width(width).Height(height).Render(content)
@@ -775,8 +775,8 @@ func (m *MainView) renderTorrentList(width, height int) string {
 	style := styles.FocusedPanelStyle // Always focused
 
 	// Set dimensions for the torrent list component
-	// Account for panel borders (2) and padding (4 horizontal, 2 vertical)
-	m.torrentList.SetDimensions(width-6, height-4)
+	// Account for panel borders (2) and padding (4 horizontal, 1 vertical)
+	m.torrentList.SetDimensions(width-6, height-3)
 
 	content := m.torrentList.View()
 	return style.Width(width).Height(height).Render(content)
@@ -786,8 +786,8 @@ func (m *MainView) renderTorrentList(width, height int) string {
 func (m *MainView) renderFilterPanel(width, height int) string {
 	style := styles.PanelStyle
 
-	// Set dimensions for the filter panel component
-	m.filterPanel.SetDimensions(width-6, height-4)
+	// Fixed dimensions: filter panel is always 3 lines tall
+	m.filterPanel.SetDimensions(width-6, 1) // 3 total - 2 for borders = 1 content line
 
 	content := m.filterPanel.View()
 	return style.Width(width).Height(height).Render(content)
@@ -800,7 +800,7 @@ func (m *MainView) updateDimensions() {
 	if m.viewMode == ViewModeDetails {
 		helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
 		contentHeight := m.height - helpHeight - 1
-		m.torrentDetails.SetSize(m.width-4, contentHeight-4)
+		m.torrentDetails.SetSize(m.width-4, contentHeight-3)
 	}
 }
 
@@ -1029,7 +1029,7 @@ func (m *MainView) renderDetailsView() string {
 	contentHeight := m.height - helpHeight - 1
 
 	// Set dimensions for the details component
-	m.torrentDetails.SetSize(m.width-4, contentHeight-4) // Account for panel borders
+	m.torrentDetails.SetSize(m.width-4, contentHeight-3) // Account for panel borders
 
 	// Render the details in a panel
 	content := m.torrentDetails.View()

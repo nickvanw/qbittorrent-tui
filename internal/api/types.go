@@ -37,14 +37,9 @@ type GlobalStats struct {
 	UpInfoSpeed      int64  `json:"up_info_speed"`
 	DlInfoData       int64  `json:"dl_info_data"`
 	UpInfoData       int64  `json:"up_info_data"`
-	NumTorrents      int    `json:"num_torrents"`
-	NumActiveItems   int    `json:"num_active_torrents"`
 	ConnectionStatus string `json:"connection_status"`
-	DHT              bool   `json:"dht"`
-	PeerExchange     bool   `json:"peer_exchange"`
 	DHTNodes         int64  `json:"dht_nodes"`
-	TorrentsCount    int    `json:"torrents_count"`
-	FreeSpaceOnDisk  int64  `json:"free_space_on_disk"`
+	FreeSpaceOnDisk  int64  `json:"free_space_on_disk"` // From /api/v2/sync/maindata
 }
 
 // MainData represents the response from /api/v2/sync/maindata

@@ -34,11 +34,8 @@ func NewMockClient() *MockClient {
 		GlobalStats: &GlobalStats{
 			DlInfoSpeed:      1024 * 1024,
 			UpInfoSpeed:      512 * 1024,
-			NumTorrents:      10,
-			NumActiveItems:   3,
 			ConnectionStatus: "connected",
 			DHTNodes:         150,
-			TorrentsCount:    10,
 			FreeSpaceOnDisk:  1024 * 1024 * 1024 * 500, // 500GB
 		},
 	}
