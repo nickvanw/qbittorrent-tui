@@ -19,7 +19,6 @@ var (
 	username   string
 	password   string
 	refreshInt int
-	theme      string
 )
 
 func main() {
@@ -51,7 +50,6 @@ CONFIGURATION:
     QBT_SERVER_USERNAME      qBittorrent username  
     QBT_SERVER_PASSWORD      qBittorrent password
     QBT_UI_REFRESH_INTERVAL  Refresh interval in seconds (default: 3)
-    QBT_UI_THEME             UI theme (default: default)
 
 EXAMPLES:
   Using command line flags:
@@ -68,7 +66,6 @@ EXAMPLES:
     
     [ui]
     refresh_interval = 5
-    theme = "default"
 
 KEYBOARD SHORTCUTS:
   Navigation:
@@ -107,7 +104,6 @@ func init() {
 
 	// UI configuration flags
 	rootCmd.Flags().IntVarP(&refreshInt, "refresh", "r", 3, "refresh interval in seconds (default: 3)")
-	rootCmd.Flags().StringVarP(&theme, "theme", "t", "default", "UI theme (default: default)")
 
 	// Note: Flag binding will be handled in config.Load() to ensure proper precedence
 }

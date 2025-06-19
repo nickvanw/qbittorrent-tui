@@ -36,7 +36,18 @@ theme = "dark"`,
 				assert.Equal(t, "admin", cfg.Server.Username)
 				assert.Equal(t, "pass123", cfg.Server.Password)
 				assert.Equal(t, 5, cfg.UI.RefreshInterval)
-				assert.Equal(t, "dark", cfg.UI.Theme)
+			},
+		},
+		{
+			name: "config with columns",
+			configData: `[server]
+url = "http://localhost:8080"
+
+[ui]
+columns = ["name", "size", "status", "down", "up"]`,
+			wantErr: false,
+			validate: func(t *testing.T, cfg *Config) {
+				assert.Equal(t, []string{"name", "size", "status", "down", "up"}, cfg.UI.Columns)
 			},
 		},
 		{
@@ -63,7 +74,6 @@ url = "http://localhost:8080"`,
 			wantErr: false,
 			validate: func(t *testing.T, cfg *Config) {
 				assert.Equal(t, 3, cfg.UI.RefreshInterval)
-				assert.Equal(t, "default", cfg.UI.Theme)
 			},
 		},
 		{
@@ -145,8 +155,8 @@ func TestConfigValidation(t *testing.T) {
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -157,8 +167,8 @@ func TestConfigValidation(t *testing.T) {
 			name: "missing server URL",
 			config: Config{
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -177,8 +187,8 @@ func TestConfigValidation(t *testing.T) {
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
-					RefreshInterval int    `mapstructure:"refresh_interval"`
-					Theme           string `mapstructure:"theme"`
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
 				}{
 					RefreshInterval: 0,
 				},
@@ -232,7 +242,7 @@ theme = "config_theme"`,
 				"server.url":          "http://flag:8080", // Flag wins
 				"server.username":     "flaguser",         // Flag wins
 				"ui.refresh_interval": 20,                 // ENV wins (no flag)
-				"ui.theme":            "config_theme",     // Config wins (no flag, no env)
+				// Config wins (no flag, no env)
 			},
 			description: "Flags override env vars and config file",
 		},
@@ -271,20 +281,16 @@ refresh_interval = 15`,
 			expected: map[string]interface{}{
 				"server.url":          "http://config:8080", // Config wins
 				"ui.refresh_interval": 15,                   // Config wins
-				"ui.theme":            "default",            // Default wins
 			},
 			description: "Config file values used when no flags or env vars",
 		},
 		{
-			name:       "Defaults only",
-			configData: "",
-			envVars:    map[string]string{},
-			flags:      map[string]string{},
-			expected: map[string]interface{}{
-				"ui.refresh_interval": 3,         // Default
-				"ui.theme":            "default", // Default
-			},
-			description: "Default values used when nothing else provided",
+			name:        "Defaults only",
+			configData:  "",
+			envVars:     map[string]string{},
+			flags:       map[string]string{},
+			expected:    map[string]interface{}{},
+			description: "Should fail when no server URL provided",
 		},
 	}
 
@@ -298,17 +304,22 @@ refresh_interval = 15`,
 				defer os.Unsetenv(k)
 			}
 
+			// Always create a temp directory to isolate from real config files
+			tmpDir := t.TempDir()
+			oldDir, _ := os.Getwd()
+			os.Chdir(tmpDir)
+			defer os.Chdir(oldDir)
+
+			// Temporarily set HOME to tmpDir to avoid loading real config
+			oldHome := os.Getenv("HOME")
+			os.Setenv("HOME", tmpDir)
+			defer os.Setenv("HOME", oldHome)
+
 			// Create temp config file if needed
-			var tmpDir string
 			if tt.configData != "" {
-				tmpDir = t.TempDir()
 				configFile := filepath.Join(tmpDir, "config.toml")
 				err := os.WriteFile(configFile, []byte(tt.configData), 0644)
 				require.NoError(t, err)
-
-				oldDir, _ := os.Getwd()
-				os.Chdir(tmpDir)
-				defer os.Chdir(oldDir)
 			}
 
 			// Create a mock command with flags if needed
@@ -319,7 +330,6 @@ refresh_interval = 15`,
 				cmd.Flags().String("username", "", "")
 				cmd.Flags().String("password", "", "")
 				cmd.Flags().Int("refresh", 0, "")
-				cmd.Flags().String("theme", "", "")
 
 				// Set flag values
 				for flag, value := range tt.flags {
@@ -332,7 +342,7 @@ refresh_interval = 15`,
 
 			// Should only fail if missing required URL
 			if _, hasURL := tt.expected["server.url"]; !hasURL {
-				assert.Error(t, err)
+				require.Error(t, err, "expected error when server.url is missing")
 				assert.Contains(t, err.Error(), "server.url is required")
 				return
 			}
@@ -351,8 +361,6 @@ refresh_interval = 15`,
 					assert.Equal(t, expectedValue, cfg.Server.Password, tt.description)
 				case "ui.refresh_interval":
 					assert.Equal(t, expectedValue, cfg.UI.RefreshInterval, tt.description)
-				case "ui.theme":
-					assert.Equal(t, expectedValue, cfg.UI.Theme, tt.description)
 				}
 			}
 		})
