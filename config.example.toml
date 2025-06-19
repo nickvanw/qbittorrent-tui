@@ -5,5 +5,4 @@ password = "adminpass"
 
 [ui]
 refresh_interval = 3  # seconds
-theme = "default"
 # columns = ["name", "size", "progress", "status", "down", "up", "seeds", "peers", "ratio"]  # Default columns to display

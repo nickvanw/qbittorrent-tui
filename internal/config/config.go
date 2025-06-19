@@ -19,7 +19,6 @@ type Config struct {
 
 	UI struct {
 		RefreshInterval int      `mapstructure:"refresh_interval"`
-		Theme           string   `mapstructure:"theme"`
 		Columns         []string `mapstructure:"columns"`
 	} `mapstructure:"ui"`
 }
@@ -34,7 +33,6 @@ func Load(cmd *cobra.Command) (*Config, error) {
 
 	// Set defaults
 	viper.SetDefault("ui.refresh_interval", 3)
-	viper.SetDefault("ui.theme", "default")
 
 	// Set up environment variable binding
 	viper.SetEnvPrefix("QBT")
@@ -46,7 +44,6 @@ func Load(cmd *cobra.Command) (*Config, error) {
 	viper.BindEnv("server.username", "QBT_SERVER_USERNAME")
 	viper.BindEnv("server.password", "QBT_SERVER_PASSWORD")
 	viper.BindEnv("ui.refresh_interval", "QBT_UI_REFRESH_INTERVAL")
-	viper.BindEnv("ui.theme", "QBT_UI_THEME")
 	viper.BindEnv("ui.columns", "QBT_UI_COLUMNS")
 
 	// Read config file if it exists
@@ -70,9 +67,6 @@ func Load(cmd *cobra.Command) (*Config, error) {
 		}
 		if err := viper.BindPFlag("ui.refresh_interval", cmd.Flags().Lookup("refresh")); err != nil {
 			return nil, fmt.Errorf("failed to bind ui.refresh_interval flag: %w", err)
-		}
-		if err := viper.BindPFlag("ui.theme", cmd.Flags().Lookup("theme")); err != nil {
-			return nil, fmt.Errorf("failed to bind ui.theme flag: %w", err)
 		}
 	}
 
