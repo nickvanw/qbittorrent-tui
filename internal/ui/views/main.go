@@ -78,6 +78,7 @@ type (
 	errorMsg          error
 	successMsg        string
 	tickMsg           time.Time
+	uiTickMsg         time.Time // Separate tick for UI updates
 	clearErrorMsg     struct{}
 	clearSuccessMsg   struct{}
 	delayedRefreshMsg struct{}
@@ -107,6 +108,7 @@ type MainView struct {
 	lastError       error
 	lastSuccess     string
 	isLoading       bool
+	lastRefreshTime time.Time // Track when data was last refreshed
 
 	// Delete confirmation dialog state
 	showDeleteDialog bool
@@ -243,6 +245,7 @@ func (m *MainView) Init() tea.Cmd {
 	return tea.Batch(
 		m.fetchAllData(),
 		m.tickCmd(),
+		m.uiTickCmd(),
 	)
 }
 
@@ -317,6 +320,13 @@ func (m *MainView) tickCmd() tea.Cmd {
 	})
 }
 
+// uiTickCmd creates a more frequent tick for UI updates (e.g., refresh timer)
+func (m *MainView) uiTickCmd() tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		return uiTickMsg(t)
+	})
+}
+
 // clearErrorTimer creates a timer to clear errors after 5 seconds
 func (m *MainView) clearErrorTimer() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
@@ -355,6 +365,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.allTorrents = []api.Torrent(msg)
 		m.applyFilter()
 		m.isLoading = false
+		m.lastRefreshTime = time.Now()
 		// Don't auto-clear errors here - let timer handle it
 
 		// Update torrent details if currently viewing a torrent
@@ -380,6 +391,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stats = (*api.GlobalStats)(msg)
 		m.statsPanel.SetStats(m.stats)
 		m.isLoading = false
+		m.lastRefreshTime = time.Now()
 
 	case categoriesDataMsg:
 		m.categories = map[string]interface{}(msg)
@@ -438,6 +450,11 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.torrentDetails, cmd = m.torrentDetails.Update(time.Time(msg))
 			cmds = append(cmds, cmd)
 		}
+
+	case uiTickMsg:
+		// Just trigger a re-render for UI updates (like refresh timer)
+		// Continue the UI tick
+		cmds = append(cmds, m.uiTickCmd())
 
 	case tea.KeyMsg:
 		// Handle add torrent dialog first (highest priority)
@@ -774,6 +791,7 @@ func (m *MainView) renderStatsPanel(width, height int) string {
 
 	// Fixed dimensions: stats panel is always 5 lines tall
 	m.statsPanel.SetDimensions(width-6, 2) // 5 total - 3 for borders/padding = 2 content
+	m.statsPanel.SetLastRefreshTime(m.lastRefreshTime)
 
 	content := m.statsPanel.View()
 	return style.Width(width).Height(height).Render(content)
