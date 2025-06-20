@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -12,9 +13,10 @@ import (
 
 // StatsPanel displays global statistics
 type StatsPanel struct {
-	stats  *api.GlobalStats
-	width  int
-	height int
+	stats           *api.GlobalStats
+	width           int
+	height          int
+	lastRefreshTime time.Time
 }
 
 // NewStatsPanel creates a new stats panel
@@ -25,6 +27,11 @@ func NewStatsPanel() *StatsPanel {
 // SetStats updates the statistics
 func (s *StatsPanel) SetStats(stats *api.GlobalStats) {
 	s.stats = stats
+}
+
+// SetLastRefreshTime updates the last refresh time
+func (s *StatsPanel) SetLastRefreshTime(t time.Time) {
+	s.lastRefreshTime = t
 }
 
 // Update handles messages
@@ -133,6 +140,12 @@ func (s *StatsPanel) renderSessionStats() string {
 	// Free space
 	freeSpace := styles.FormatBytes(s.stats.FreeSpaceOnDisk)
 	lines = append(lines, fmt.Sprintf("Free space: %s", freeSpace))
+
+	// Last refresh time
+	if !s.lastRefreshTime.IsZero() {
+		elapsed := time.Since(s.lastRefreshTime)
+		lines = append(lines, fmt.Sprintf("Last refresh: %ds ago", int(elapsed.Seconds())))
+	}
 
 	return lipgloss.NewStyle().
 		Width(30).
