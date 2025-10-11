@@ -38,6 +38,7 @@ go test ./...  # Unit tests
   - `/api/v2/transfer/info` - Get global transfer statistics (speeds, data transferred, DHT nodes, connection status)
   - `/api/v2/sync/maindata` - Get server state including free disk space
 - **Note**: Torrent counts are not provided by the API - must be calculated from torrent list
+- PLEASE MAKE SURE TO LOOK UP THE API DOCUMENTATION IF DOING WORK WITH THE API!
 
 ### Key Features Implemented
 - ✅ **Responsive layout** - Dynamic column sizing based on terminal width

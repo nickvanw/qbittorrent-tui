@@ -157,6 +157,10 @@ func TestConfigValidation(t *testing.T) {
 				UI: struct {
 					RefreshInterval int      `mapstructure:"refresh_interval"`
 					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -169,6 +173,10 @@ func TestConfigValidation(t *testing.T) {
 				UI: struct {
 					RefreshInterval int      `mapstructure:"refresh_interval"`
 					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -189,12 +197,107 @@ func TestConfigValidation(t *testing.T) {
 				UI: struct {
 					RefreshInterval int      `mapstructure:"refresh_interval"`
 					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
 				}{
 					RefreshInterval: 0,
 				},
 			},
 			wantErr: true,
 			errMsg:  "refresh_interval must be at least 1 second",
+		},
+		{
+			name: "invalid default sort column",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+				}{
+					RefreshInterval: 3,
+					DefaultSort: struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					}{
+						Column: "invalid_column",
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "ui.default_sort.column must be one of:",
+		},
+		{
+			name: "invalid default sort direction",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+				}{
+					RefreshInterval: 3,
+					DefaultSort: struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					}{
+						Column:    "name",
+						Direction: "invalid",
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "ui.default_sort.direction must be either 'asc' or 'desc'",
+		},
+		{
+			name: "valid default sort",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+				}{
+					RefreshInterval: 3,
+					DefaultSort: struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					}{
+						Column:    "size",
+						Direction: "desc",
+					},
+				},
+			},
+			wantErr: false,
 		},
 	}
 

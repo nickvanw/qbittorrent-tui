@@ -97,7 +97,7 @@ func NewTorrentList() *TorrentList {
 }
 
 // NewTorrentListWithColumns creates a new torrent list component with custom visible columns
-func NewTorrentListWithColumns(columns []string) *TorrentList {
+func NewTorrentListWithColumns(columns []string, defaultSortColumn string, defaultSortDirection string) *TorrentList {
 	visibleCols := columns
 	if len(visibleCols) == 0 {
 		visibleCols = append([]string{}, defaultVisibleColumns...)
@@ -119,14 +119,33 @@ func NewTorrentListWithColumns(columns []string) *TorrentList {
 		validCols = append([]string{}, defaultVisibleColumns...)
 	}
 
+	// Set up default sort configuration
+	sortCol := "name"
+	sortDir := SortAsc
+
+	// Apply custom default sort if provided and valid
+	if defaultSortColumn != "" {
+		// Validate the column exists
+		for _, availCol := range allColumns {
+			if defaultSortColumn == availCol.Key {
+				sortCol = defaultSortColumn
+				break
+			}
+		}
+	}
+
+	if defaultSortDirection == "desc" {
+		sortDir = SortDesc
+	}
+
 	return &TorrentList{
 		torrents:       []api.Torrent{},
 		showProgress:   true,
 		visibleColumns: validCols,
 		sortConfig: SortConfig{
-			Column:    "name",  // Default sort by name
-			Direction: SortAsc, // Ascending
-			Secondary: "size",  // Secondary sort by size
+			Column:    sortCol,
+			Direction: sortDir,
+			Secondary: "size", // Secondary sort by size
 		},
 	}
 }
@@ -934,4 +953,13 @@ func (t *TorrentList) GetSortableColumns() map[int]string {
 		}
 	}
 	return result
+}
+
+// GetValidColumnKeys returns all valid column keys
+func GetValidColumnKeys() []string {
+	keys := make([]string, len(allColumns))
+	for i, col := range allColumns {
+		keys[i] = col.Key
+	}
+	return keys
 }
