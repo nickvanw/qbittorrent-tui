@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/nickvanw/qbittorrent-tui/internal/ui/components"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -20,6 +22,10 @@ type Config struct {
 	UI struct {
 		RefreshInterval int      `mapstructure:"refresh_interval"`
 		Columns         []string `mapstructure:"columns"`
+		DefaultSort     struct {
+			Column    string `mapstructure:"column"`
+			Direction string `mapstructure:"direction"`
+		} `mapstructure:"default_sort"`
 	} `mapstructure:"ui"`
 }
 
@@ -45,6 +51,8 @@ func Load(cmd *cobra.Command) (*Config, error) {
 	viper.BindEnv("server.password", "QBT_SERVER_PASSWORD")
 	viper.BindEnv("ui.refresh_interval", "QBT_UI_REFRESH_INTERVAL")
 	viper.BindEnv("ui.columns", "QBT_UI_COLUMNS")
+	viper.BindEnv("ui.default_sort.column", "QBT_UI_DEFAULT_SORT_COLUMN")
+	viper.BindEnv("ui.default_sort.direction", "QBT_UI_DEFAULT_SORT_DIRECTION")
 
 	// Read config file if it exists
 	if err := viper.ReadInConfig(); err != nil {
@@ -89,6 +97,22 @@ func (c *Config) validate() error {
 
 	if c.UI.RefreshInterval < 1 {
 		return fmt.Errorf("ui.refresh_interval must be at least 1 second")
+	}
+
+	// Validate default sort configuration if provided
+	if c.UI.DefaultSort.Column != "" {
+		validColumns := components.GetValidColumnKeys()
+		isValid := slices.Contains(validColumns, c.UI.DefaultSort.Column)
+		if !isValid {
+			return fmt.Errorf("ui.default_sort.column must be one of: %v", validColumns)
+		}
+	}
+
+	// Validate sort direction if provided
+	if c.UI.DefaultSort.Direction != "" {
+		if c.UI.DefaultSort.Direction != "asc" && c.UI.DefaultSort.Direction != "desc" {
+			return fmt.Errorf("ui.default_sort.direction must be either 'asc' or 'desc'")
+		}
 	}
 
 	return nil

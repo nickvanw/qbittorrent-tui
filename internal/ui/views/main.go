@@ -229,7 +229,7 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 	return &MainView{
 		config:         cfg,
 		apiClient:      client,
-		torrentList:    components.NewTorrentListWithColumns(cfg.UI.Columns),
+		torrentList:    components.NewTorrentListWithColumns(cfg.UI.Columns, cfg.UI.DefaultSort.Column, cfg.UI.DefaultSort.Direction),
 		statsPanel:     components.NewStatsPanel(),
 		filterPanel:    components.NewFilterPanel(),
 		torrentDetails: components.NewTorrentDetails(client),
@@ -1542,6 +1542,6 @@ func (m *MainView) addTorrentURL(url string) tea.Cmd {
 		if err != nil {
 			return errorMsg(fmt.Errorf("failed to add torrent from URL: %w", err))
 		}
-		return successMsg(fmt.Sprintf("added torrent from URL"))
+		return successMsg("added torrent from URL")
 	}
 }
