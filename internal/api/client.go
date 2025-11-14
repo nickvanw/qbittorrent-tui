@@ -379,6 +379,36 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 	return nil
 }
 
+func (c *Client) SetTorrentLocation(ctx context.Context, hashes []string, newLocation string) error {
+	data := url.Values{
+		"hashes":   {strings.Join(hashes, "|")},
+		"location": {newLocation},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/v2/torrents/setLocation", strings.NewReader(data.Encode()))
+	if err != nil {
+		return NewValidationError("failed to create set location request", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", c.baseURL)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if os.IsTimeout(err) {
+			return NewTimeoutError("set location request timed out", err)
+		}
+		return NewNetworkError("set location request failed", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return WrapHTTPError(resp, nil)
+	}
+
+	return nil
+}
+
 func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
