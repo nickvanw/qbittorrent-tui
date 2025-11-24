@@ -409,6 +409,24 @@ func (c *Client) SetTorrentLocation(ctx context.Context, hashes []string, newLoc
 	return nil
 }
 
+// GetDirectoryContent retrieves the contents of a directory on the qBittorrent server
+func (c *Client) GetDirectoryContent(ctx context.Context, path string, mode string) ([]string, error) {
+	// Build query parameters
+	params := url.Values{
+		"dirPath": {path}, // Note: API uses "dirPath" not "path"
+		"mode":    {mode}, // "all", "files", or "dirs"
+	}
+
+	endpoint := "/api/v2/app/getDirectoryContent?" + params.Encode()
+
+	var result []string
+	if err := c.get(ctx, endpoint, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+endpoint, nil)
 	if err != nil {
