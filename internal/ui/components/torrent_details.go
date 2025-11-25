@@ -369,13 +369,15 @@ func (t *TorrentDetails) renderPeersTab() string {
 		minWidth int
 		flex     float64
 	}{
-		{"IP:Port", 18, 0.2},
-		{"Client", 15, 0.25},
-		{"Country", 8, 0.1},
-		{"Connection", 10, 0.15},
-		{"Progress", 8, 0.1},
-		{"DL Speed", 9, 0.1},
-		{"UL Speed", 9, 0.1},
+		{"IP:Port", 18, 0.15},
+		{"Client", 15, 0.2},
+		{"Country", 8, 0.08},
+		{"Connection", 10, 0.12},
+		{"Progress", 8, 0.08},
+		{"DL Speed", 9, 0.08},
+		{"UL Speed", 9, 0.08},
+		{"Downloaded", 10, 0.1},
+		{"Uploaded", 10, 0.11},
 	}
 
 	// Calculate actual column widths
@@ -409,6 +411,8 @@ func (t *TorrentDetails) renderPeersTab() string {
 		progress := fmt.Sprintf("%.1f%%", peer.Progress*100)
 		dlSpeed := formatBytes(peer.DlSpeed) + "/s"
 		ulSpeed := formatBytes(peer.UpSpeed) + "/s"
+		downloaded := formatBytes(peer.Downloaded)
+		uploaded := formatBytes(peer.Uploaded)
 		address := fmt.Sprintf("%s:%d", peer.IP, peer.Port)
 
 		values := []string{
@@ -419,6 +423,8 @@ func (t *TorrentDetails) renderPeersTab() string {
 			progress,
 			dlSpeed,
 			ulSpeed,
+			downloaded,
+			uploaded,
 		}
 
 		var rowParts []string
