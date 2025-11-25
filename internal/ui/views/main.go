@@ -51,14 +51,12 @@ type FileNavigator struct {
 
 // RemoteFileNavigator handles remote directory browser functionality
 type RemoteFileNavigator struct {
-	apiClient     api.ClientInterface
-	currentPath   string
-	directories   []string // Directory names only
-	selectedIdx   int
-	searchPattern string
-	searchMode    bool
-	loading       bool
-	loadError     error
+	apiClient   api.ClientInterface
+	currentPath string
+	directories []string // Full directory paths
+	selectedIdx int
+	loading     bool
+	loadError   error
 }
 
 // URLInput handles URL input functionality
@@ -1606,7 +1604,7 @@ func (m *MainView) renderLocationBrowser() string {
 	}
 
 	// Instructions
-	navInstructions := styles.DimStyle.Render("↑↓: Navigate  Enter: Select highlighted  h: Up  l: Browse into")
+	navInstructions := styles.DimStyle.Render("↑↓: Navigate  Enter: Set as location  h: Up  l: Browse into")
 
 	// Combine all parts
 	content := []string{pathDisplay}
@@ -1826,7 +1824,7 @@ func (m *MainView) handlePathInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
 			pathInput.cursor = len(pathInput.path)
 		}
 	case "ctrl+a":
-		// Clear field
+		// Select all (clear field)
 		pathInput.path = ""
 		pathInput.cursor = 0
 	case "ctrl+u":
@@ -2036,14 +2034,12 @@ func NewLocationDialog(apiClient api.ClientInterface, currentPath, torrentName s
 	}
 
 	remoteNav := &RemoteFileNavigator{
-		apiClient:     apiClient,
-		currentPath:   startPath,
-		directories:   []string{},
-		selectedIdx:   0,
-		searchPattern: "",
-		searchMode:    false,
-		loading:       false,
-		loadError:     nil,
+		apiClient:   apiClient,
+		currentPath: startPath,
+		directories: []string{},
+		selectedIdx: 0,
+		loading:     false,
+		loadError:   nil,
 	}
 
 	return &LocationDialog{

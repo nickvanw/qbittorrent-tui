@@ -600,7 +600,7 @@ func TestGetDirectoryContent(t *testing.T) {
 	dirs, err := mock.GetDirectoryContent(ctx, "/", "dirs")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, dirs)
-	assert.Contains(t, dirs, "downloads")
+	assert.Contains(t, dirs, "/downloads")
 
 	// Test subdirectory
 	dirs, err = mock.GetDirectoryContent(ctx, "/downloads", "dirs")

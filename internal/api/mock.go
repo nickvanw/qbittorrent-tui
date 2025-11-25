@@ -343,11 +343,11 @@ func (m *MockClient) GetDirectoryContent(ctx context.Context, path string, mode 
 	// Mock implementation - return sample directories
 	switch path {
 	case "/":
-		return []string{"home", "downloads", "media", "tmp"}, nil
+		return []string{"/home", "/downloads", "/media", "/tmp"}, nil
 	case "/downloads":
-		return []string{"complete", "incomplete", "torrents"}, nil
+		return []string{"/downloads/complete", "/downloads/incomplete", "/downloads/torrents"}, nil
 	case "/media":
-		return []string{"movies", "tv", "music"}, nil
+		return []string{"/media/movies", "/media/tv", "/media/music"}, nil
 	default:
 		return []string{}, nil
 	}
