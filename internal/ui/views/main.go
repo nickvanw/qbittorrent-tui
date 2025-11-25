@@ -90,11 +90,11 @@ type PathInput struct {
 
 // LocationDialog represents the set location dialog state
 type LocationDialog struct {
-	mode         LocationMode
-	remoteNav    *RemoteFileNavigator
-	pathInput    *PathInput
-	currentPath  string // The torrent's current save path
-	torrentName  string // Name of torrent for display
+	mode        LocationMode
+	remoteNav   *RemoteFileNavigator
+	pathInput   *PathInput
+	currentPath string // The torrent's current save path
+	torrentName string // Name of torrent for display
 }
 
 // ViewMode represents the current view mode
@@ -204,10 +204,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Enter, k.Escape},              // Navigation and Actions
-		{k.Pause, k.Resume, k.Delete, k.Add},           // Torrent Control
+		{k.Up, k.Down, k.Enter, k.Escape},               // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete, k.Add},            // Torrent Control
 		{k.SetLocation, k.Refresh, k.Filter, k.Columns}, // Features
-		{k.Help, k.Quit},                               // General
+		{k.Help, k.Quit},                                // General
 	}
 }
 

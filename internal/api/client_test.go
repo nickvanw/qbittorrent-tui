@@ -609,7 +609,7 @@ func TestGetDirectoryContent(t *testing.T) {
 
 	// Test authentication required
 	mock.LoggedIn = false
-	dirs, err = mock.GetDirectoryContent(ctx, "/", "dirs")
+	_, err = mock.GetDirectoryContent(ctx, "/", "dirs")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication required")
 }
