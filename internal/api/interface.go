@@ -23,6 +23,7 @@ type ClientInterface interface {
 	DeleteTorrents(ctx context.Context, hashes []string, deleteFiles bool) error
 	AddTorrentFile(ctx context.Context, filePath string) error
 	AddTorrentURL(ctx context.Context, url string) error
+	SetTorrentLocation(ctx context.Context, hashes []string, newLocation string) error
 
 	// Global operations
 	GetGlobalStats(ctx context.Context) (*GlobalStats, error)
