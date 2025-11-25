@@ -568,6 +568,10 @@ func TestTorrentControlMethods(t *testing.T) {
 	err = mock.DeleteTorrents(ctx, hashes, true)
 	assert.NoError(t, err)
 
+	// Test SetTorrentLocation
+	err = mock.SetTorrentLocation(ctx, hashes, "/new/location")
+	assert.NoError(t, err)
+
 	// Test authentication required
 	mock.LoggedIn = false
 	err = mock.PauseTorrents(ctx, hashes)
@@ -579,6 +583,33 @@ func TestTorrentControlMethods(t *testing.T) {
 	assert.Contains(t, err.Error(), "authentication required")
 
 	err = mock.DeleteTorrents(ctx, hashes, false)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+
+	err = mock.SetTorrentLocation(ctx, hashes, "/new/location")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+}
+
+func TestGetDirectoryContent(t *testing.T) {
+	mock := NewMockClient()
+	mock.LoggedIn = true
+	ctx := context.Background()
+
+	// Test root directory
+	dirs, err := mock.GetDirectoryContent(ctx, "/", "dirs")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dirs)
+	assert.Contains(t, dirs, "/downloads")
+
+	// Test subdirectory
+	dirs, err = mock.GetDirectoryContent(ctx, "/downloads", "dirs")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, dirs)
+
+	// Test authentication required
+	mock.LoggedIn = false
+	_, err = mock.GetDirectoryContent(ctx, "/", "dirs")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication required")
 }

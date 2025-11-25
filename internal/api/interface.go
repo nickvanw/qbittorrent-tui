@@ -29,4 +29,5 @@ type ClientInterface interface {
 	GetGlobalStats(ctx context.Context) (*GlobalStats, error)
 	GetCategories(ctx context.Context) (map[string]interface{}, error)
 	GetTags(ctx context.Context) ([]string, error)
+	GetDirectoryContent(ctx context.Context, path string, mode string) ([]string, error)
 }

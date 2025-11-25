@@ -6,6 +6,11 @@ A fully-featured Terminal UI for qBittorrent with responsive layout, dynamic sor
 
 ## Key Technical Details
 
+### Docs
+Before doing anything, make sure you READ THE DOCS: https://github.com/qbittorrent/qBittorrent/wiki/WebUI-API-(qBittorrent-5.0). This has all of the details for how to get information, what can be shown, etc. 
+
+These are the only API documents that you can trust - if it is not in here it does not exist.
+
 ### qBittorrent Authentication
 - **Test password**: `testpass123`
 - **Config file**: Use `testdata/qBittorrent-working.conf`
@@ -20,6 +25,18 @@ QBT_TEST_PASSWORD="testpass123" go test -v -tags=integration ./internal/api
 ```bash
 make validate  # Full validation suite
 go test ./...  # Unit tests
+```
+
+### GitHub Workflow
+```bash
+# Fetch and checkout a pull request
+gh pr checkout <PR_NUMBER>
+
+# View PR details
+gh pr view <PR_NUMBER>
+
+# List PRs
+gh pr list
 ```
 
 ## Architecture

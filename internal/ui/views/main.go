@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -48,6 +49,16 @@ type FileNavigator struct {
 	searchMode    bool
 }
 
+// RemoteFileNavigator handles remote directory browser functionality
+type RemoteFileNavigator struct {
+	apiClient   api.ClientInterface
+	currentPath string
+	directories []string // Full directory paths
+	selectedIdx int
+	loading     bool
+	loadError   error
+}
+
 // URLInput handles URL input functionality
 type URLInput struct {
 	url    string
@@ -61,6 +72,29 @@ type AddTorrentDialog struct {
 	urlInput *URLInput
 }
 
+// LocationMode represents the mode for setting location
+type LocationMode int
+
+const (
+	LocationModeText LocationMode = iota
+	LocationModeBrowser
+)
+
+// PathInput handles path text input functionality
+type PathInput struct {
+	path   string
+	cursor int
+}
+
+// LocationDialog represents the set location dialog state
+type LocationDialog struct {
+	mode        LocationMode
+	remoteNav   *RemoteFileNavigator
+	pathInput   *PathInput
+	currentPath string // The torrent's current save path
+	torrentName string // Name of torrent for display
+}
+
 // ViewMode represents the current view mode
 type ViewMode int
 
@@ -71,17 +105,22 @@ const (
 
 // Message types
 type (
-	torrentDataMsg    []api.Torrent
-	statsDataMsg      *api.GlobalStats
-	categoriesDataMsg map[string]interface{}
-	tagsDataMsg       []string
-	errorMsg          error
-	successMsg        string
-	tickMsg           time.Time
-	uiTickMsg         time.Time // Separate tick for UI updates
-	clearErrorMsg     struct{}
-	clearSuccessMsg   struct{}
-	delayedRefreshMsg struct{}
+	torrentDataMsg      []api.Torrent
+	statsDataMsg        *api.GlobalStats
+	categoriesDataMsg   map[string]interface{}
+	tagsDataMsg         []string
+	errorMsg            error
+	successMsg          string
+	tickMsg             time.Time
+	uiTickMsg           time.Time // Separate tick for UI updates
+	clearErrorMsg       struct{}
+	clearSuccessMsg     struct{}
+	delayedRefreshMsg   struct{}
+	directoryContentMsg struct {
+		path        string
+		directories []string
+		err         error
+	}
 )
 
 // MainView is the main application view
@@ -112,12 +151,19 @@ type MainView struct {
 
 	// Delete confirmation dialog state
 	showDeleteDialog bool
-	deleteTarget     *api.Torrent
+	deleteTargetHash string
+	deleteTargetName string
 	deleteWithFiles  bool
 
 	// Add torrent dialog state
 	showAddDialog bool
 	addDialog     *AddTorrentDialog
+
+	// Location dialog state
+	showLocationDialog bool
+	locationDialog     *LocationDialog
+	locationTargetHash string
+	locationTargetName string
 
 	// Dimensions
 	width  int
@@ -140,11 +186,12 @@ type KeyMap struct {
 	Quit    key.Binding
 
 	// Torrent control
-	Pause   key.Binding
-	Resume  key.Binding
-	Delete  key.Binding
-	Add     key.Binding
-	Columns key.Binding
+	Pause       key.Binding
+	Resume      key.Binding
+	Delete      key.Binding
+	Add         key.Binding
+	SetLocation key.Binding
+	Columns     key.Binding
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view
@@ -155,10 +202,10 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Enter, k.Escape},    // Navigation and Actions
-		{k.Pause, k.Resume, k.Delete, k.Add}, // Torrent Control
-		{k.Refresh, k.Filter, k.Columns},     // Features
-		{k.Help, k.Quit},                     // General
+		{k.Up, k.Down, k.Enter, k.Escape},               // Navigation and Actions
+		{k.Pause, k.Resume, k.Delete, k.Add},            // Torrent Control
+		{k.SetLocation, k.Refresh, k.Filter, k.Columns}, // Features
+		{k.Help, k.Quit},                                // General
 	}
 }
 
@@ -215,6 +262,10 @@ func DefaultKeyMap() KeyMap {
 		Add: key.NewBinding(
 			key.WithKeys("a"),
 			key.WithHelp("a", "add torrent"),
+		),
+		SetLocation: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", "set location"),
 		),
 		Columns: key.NewBinding(
 			key.WithKeys("C"),
@@ -429,6 +480,25 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Add small delay to allow qBittorrent server to process the change
 		cmds = append(cmds, m.delayedRefresh())
 
+	case directoryContentMsg:
+		if m.locationDialog != nil && m.locationDialog.remoteNav != nil {
+			nav := m.locationDialog.remoteNav
+			nav.loading = false
+			if msg.err != nil {
+				nav.loadError = msg.err
+				nav.directories = []string{}
+			} else {
+				nav.loadError = nil
+				// Prepend ".." if not at root to allow parent navigation
+				if nav.currentPath != "/" && nav.currentPath != "" {
+					nav.directories = append([]string{".."}, msg.directories...)
+				} else {
+					nav.directories = msg.directories
+				}
+				nav.selectedIdx = 0
+			}
+		}
+
 	case clearSuccessMsg:
 		m.lastSuccess = ""
 
@@ -489,6 +559,42 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				// IMPORTANT: Return here to prevent any other key handling when dialog is open
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		// Handle location dialog (between add and delete dialogs)
+		if m.showLocationDialog {
+			switch msg.String() {
+			case "esc":
+				// Close dialog
+				m.cancelSetLocation()
+				return m, tea.Batch(cmds...)
+			case "tab":
+				// Switch between text and browser modes
+				if m.locationDialog.mode == LocationModeText {
+					m.locationDialog.mode = LocationModeBrowser
+				} else {
+					m.locationDialog.mode = LocationModeText
+				}
+				return m, tea.Batch(cmds...)
+			case "ctrl+c":
+				// Still allow quit even in dialog
+				return m, tea.Quit
+			default:
+				// Handle mode-specific keys
+				if m.locationDialog.mode == LocationModeText {
+					cmd = m.handlePathInputKeys(msg)
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				} else {
+					cmd = m.handleLocationBrowserKeys(msg.String())
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
+				}
+				// Return here to prevent any other key handling when dialog is open
 				return m, tea.Batch(cmds...)
 			}
 		}
@@ -639,6 +745,10 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Add):
 			m.showAddDialog = true
 
+		case key.Matches(msg, m.keys.SetLocation):
+			cmd = m.handleSetLocation()
+			cmds = append(cmds, cmd)
+
 		// Handle global filter keys BEFORE passing to components (to avoid conflicts)
 		case msg.String() == "s": // State filter
 			if m.viewMode == ViewModeMain && !m.filterPanel.IsInInteractiveMode() {
@@ -776,6 +886,11 @@ func (m *MainView) View() string {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
 	}
 
+	if m.showLocationDialog {
+		dialog := m.renderLocationDialog()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
 	if m.showDeleteDialog {
 		dialog := m.renderDeleteDialog()
 		// Simple overlay - place dialog in center
@@ -907,16 +1022,18 @@ func (m *MainView) handleDeleteTorrent() tea.Cmd {
 		}
 	}
 
-	// Find the selected torrent object
-	var selectedTorrent *api.Torrent
+	// Find the selected torrent to read its hash and name
+	var torrentName string
+	found := false
 	for _, torrent := range m.torrents {
 		if torrent.Hash == selectedHash {
-			selectedTorrent = &torrent
+			torrentName = torrent.Name
+			found = true
 			break
 		}
 	}
 
-	if selectedTorrent == nil {
+	if !found {
 		return func() tea.Msg {
 			return errorMsg(fmt.Errorf("selected torrent not found"))
 		}
@@ -924,7 +1041,8 @@ func (m *MainView) handleDeleteTorrent() tea.Cmd {
 
 	// Show confirmation dialog instead of immediate deletion
 	m.showDeleteDialog = true
-	m.deleteTarget = selectedTorrent
+	m.deleteTargetHash = selectedHash
+	m.deleteTargetName = torrentName
 	m.deleteWithFiles = false // Default to not deleting files
 
 	return nil // No command needed, just update UI state
@@ -932,17 +1050,18 @@ func (m *MainView) handleDeleteTorrent() tea.Cmd {
 
 // confirmDeleteTorrent performs the actual deletion after user confirmation
 func (m *MainView) confirmDeleteTorrent() tea.Cmd {
-	if m.deleteTarget == nil {
+	if m.deleteTargetHash == "" {
 		return nil
 	}
 
-	hash := m.deleteTarget.Hash
-	torrentName := m.deleteTarget.Name
+	hash := m.deleteTargetHash
+	torrentName := m.deleteTargetName
 	deleteFiles := m.deleteWithFiles
 
-	// Close dialog
+	// Close dialog and clear state
 	m.showDeleteDialog = false
-	m.deleteTarget = nil
+	m.deleteTargetHash = ""
+	m.deleteTargetName = ""
 
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -962,7 +1081,8 @@ func (m *MainView) confirmDeleteTorrent() tea.Cmd {
 // cancelDeleteTorrent cancels the delete operation
 func (m *MainView) cancelDeleteTorrent() {
 	m.showDeleteDialog = false
-	m.deleteTarget = nil
+	m.deleteTargetHash = ""
+	m.deleteTargetName = ""
 	m.deleteWithFiles = false
 }
 
@@ -1080,6 +1200,11 @@ func (m *MainView) renderDetailsView() string {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
 	}
 
+	if m.showLocationDialog {
+		dialog := m.renderLocationDialog()
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	}
+
 	if m.showDeleteDialog {
 		dialog := m.renderDeleteDialog()
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
@@ -1090,7 +1215,7 @@ func (m *MainView) renderDetailsView() string {
 
 // renderDeleteDialog renders the delete confirmation dialog
 func (m *MainView) renderDeleteDialog() string {
-	if m.deleteTarget == nil {
+	if m.deleteTargetHash == "" {
 		return ""
 	}
 
@@ -1106,7 +1231,7 @@ func (m *MainView) renderDeleteDialog() string {
 	title := styles.AccentStyle.Render("Delete Torrent")
 
 	// Torrent name (truncated if too long)
-	torrentName := m.deleteTarget.Name
+	torrentName := m.deleteTargetName
 	if len(torrentName) > 50 {
 		torrentName = torrentName[:47] + "..."
 	}
@@ -1326,6 +1451,173 @@ func countDirectories(entries []FileEntry) int {
 	return count
 }
 
+// renderLocationDialog renders the set location dialog
+func (m *MainView) renderLocationDialog() string {
+	// Dialog box styling
+	dialogStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.AccentStyle.GetForeground()).
+		Padding(1, 2).
+		Width(70).
+		Height(25).
+		Align(lipgloss.Center)
+
+	// Title
+	title := styles.AccentStyle.Render("Set Torrent Location")
+	torrentName := styles.DimStyle.Render(fmt.Sprintf("Torrent: %s", styles.TruncateString(m.locationDialog.torrentName, 50)))
+	currentLoc := styles.DimStyle.Render(fmt.Sprintf("Current: %s", m.locationDialog.currentPath))
+
+	// Mode tabs
+	var textTab, browserTab string
+	if m.locationDialog.mode == LocationModeText {
+		textTab = styles.SelectedRowStyle.Render("[Text Input]")
+		browserTab = styles.DimStyle.Render(" Browser ")
+	} else {
+		textTab = styles.DimStyle.Render(" Text Input ")
+		browserTab = styles.SelectedRowStyle.Render("[Browser]")
+	}
+	tabs := lipgloss.JoinHorizontal(lipgloss.Left, textTab, "  ", browserTab)
+
+	// Content based on mode
+	var content string
+	if m.locationDialog.mode == LocationModeText {
+		content = m.renderPathInput()
+	} else {
+		content = m.renderLocationBrowser()
+	}
+
+	// Instructions
+	instructions := styles.DimStyle.Render("Tab: Switch mode  Enter: Confirm  Esc: Cancel")
+
+	// Combine all parts
+	dialogContent := lipgloss.JoinVertical(lipgloss.Center,
+		title,
+		torrentName,
+		currentLoc,
+		"",
+		tabs,
+		"",
+		content,
+		"",
+		instructions,
+	)
+
+	return dialogStyle.Render(dialogContent)
+}
+
+// renderPathInput renders the path text input component
+func (m *MainView) renderPathInput() string {
+	pathInput := m.locationDialog.pathInput
+
+	// Path input field
+	inputStyle := styles.InputStyle.Width(60)
+
+	// Show actual path or placeholder
+	pathDisplay := pathInput.path
+	if len(pathDisplay) == 0 {
+		pathDisplay = styles.DimStyle.Render("/path/to/directory")
+	} else {
+		pathDisplay = styles.TextStyle.Render(pathDisplay + "▊") // Show cursor
+	}
+
+	inputField := inputStyle.Render(pathDisplay)
+
+	// Instructions
+	pathInstructions := styles.DimStyle.Render("Enter the new location path")
+
+	return lipgloss.JoinVertical(lipgloss.Center,
+		"",
+		"New Location:",
+		inputField,
+		"",
+		pathInstructions,
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+	)
+}
+
+// renderLocationBrowser renders the directory browser component
+func (m *MainView) renderLocationBrowser() string {
+	nav := m.locationDialog.remoteNav
+
+	// Current path display
+	pathDisplay := fmt.Sprintf("📁 %s", styles.DimStyle.Render(nav.currentPath))
+
+	// Directory listing
+	var dirLines []string
+	maxLines := 12 // Limit displayed directories
+
+	// Show loading state
+	if nav.loading {
+		dirLines = append(dirLines, styles.AccentStyle.Render("Loading..."))
+	} else if nav.loadError != nil {
+		// Show error
+		dirLines = append(dirLines, styles.ErrorStyle.Render(fmt.Sprintf("Error: %v", nav.loadError)))
+	} else if len(nav.directories) == 0 {
+		// No directories
+		dirLines = append(dirLines, styles.DimStyle.Render("No subdirectories"))
+	} else {
+		// Calculate visible range (simple scrolling)
+		startIdx := 0
+		if nav.selectedIdx >= maxLines {
+			startIdx = nav.selectedIdx - maxLines + 1
+		}
+
+		// Display directories
+		endIdx := startIdx + maxLines
+		if endIdx > len(nav.directories) {
+			endIdx = len(nav.directories)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			dirPath := nav.directories[i]
+
+			// Special handling for parent directory
+			var icon string
+			var displayName string
+			if dirPath == ".." {
+				icon = "⬆️ "
+				displayName = ".."
+			} else {
+				icon = "📁"
+				// Show just the directory name, not the full path
+				displayName = path.Base(dirPath)
+				maxNameLen := 55
+				if len(displayName) > maxNameLen {
+					displayName = displayName[:maxNameLen-3] + "..."
+				}
+			}
+
+			line := fmt.Sprintf("%s %s", icon, displayName)
+
+			// Apply selection styling
+			if i == nav.selectedIdx {
+				line = styles.SelectedRowStyle.Render(line)
+			}
+			dirLines = append(dirLines, line)
+		}
+	}
+
+	// Instructions
+	navInstructions := styles.DimStyle.Render("↑↓: Navigate  Enter: Set as location  h: Up  l: Browse into")
+
+	// Combine all parts
+	content := []string{pathDisplay}
+	content = append(content,
+		strings.Repeat("─", 60),
+		strings.Join(dirLines, "\n"),
+		strings.Repeat("─", 60),
+		navInstructions,
+	)
+
+	return lipgloss.JoinVertical(lipgloss.Left, content...)
+}
+
 // NewAddTorrentDialog creates a new add torrent dialog
 func NewAddTorrentDialog(startPath string) *AddTorrentDialog {
 	fileNav := &FileNavigator{
@@ -1517,6 +1809,100 @@ func (m *MainView) handleURLInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// handlePathInputKeys handles keyboard input for path text input
+func (m *MainView) handlePathInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
+	pathInput := m.locationDialog.pathInput
+
+	switch keyMsg.String() {
+	case "enter":
+		if len(pathInput.path) > 0 {
+			return m.confirmSetLocation(pathInput.path)
+		}
+	case "backspace":
+		if len(pathInput.path) > 0 {
+			pathInput.path = pathInput.path[:len(pathInput.path)-1]
+			pathInput.cursor = len(pathInput.path)
+		}
+	case "ctrl+a":
+		// Select all (clear field)
+		pathInput.path = ""
+		pathInput.cursor = 0
+	case "ctrl+u":
+		// Clear to beginning of line
+		pathInput.path = ""
+		pathInput.cursor = 0
+	default:
+		// Handle character input - this includes paste operations
+		if len(keyMsg.Runes) > 0 {
+			for _, r := range keyMsg.Runes {
+				// Only add printable characters (includes path chars: /, -, _, etc.)
+				if r >= 32 && r <= 126 {
+					pathInput.path += string(r)
+					pathInput.cursor++
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleLocationBrowserKeys handles keyboard input for directory browser
+func (m *MainView) handleLocationBrowserKeys(key string) tea.Cmd {
+	nav := m.locationDialog.remoteNav
+
+	switch key {
+	case "up", "k":
+		if nav.selectedIdx > 0 {
+			nav.selectedIdx--
+		}
+	case "down", "j":
+		if nav.selectedIdx < len(nav.directories)-1 {
+			nav.selectedIdx++
+		}
+	case "enter":
+		// Select the highlighted directory as the new location
+		if nav.selectedIdx < len(nav.directories) {
+			selectedPath := nav.directories[nav.selectedIdx]
+			// Special handling for parent directory
+			if selectedPath == ".." {
+				// Set location to parent directory
+				parentPath := path.Dir(nav.currentPath)
+				return m.confirmSetLocation(parentPath)
+			}
+			// API returns full paths, use directly
+			return m.confirmSetLocation(selectedPath)
+		}
+		// If no directory selected, use current directory
+		return m.confirmSetLocation(nav.currentPath)
+	case "h", "backspace":
+		// Go up one directory
+		if nav.currentPath != "/" && nav.currentPath != "" {
+			nav.currentPath = path.Dir(nav.currentPath)
+			return m.loadDirectoryContent(nav.currentPath)
+		}
+	case "l":
+		// Navigate into selected directory (vim-style)
+		if nav.selectedIdx < len(nav.directories) {
+			selectedPath := nav.directories[nav.selectedIdx]
+			// Special handling for parent directory
+			if selectedPath == ".." {
+				// Navigate up (same as 'h')
+				if nav.currentPath != "/" && nav.currentPath != "" {
+					nav.currentPath = path.Dir(nav.currentPath)
+					return m.loadDirectoryContent(nav.currentPath)
+				}
+				return nil
+			}
+			// API returns full paths, use directly
+			nav.currentPath = selectedPath
+			return m.loadDirectoryContent(selectedPath)
+		}
+	}
+
+	return nil
+}
+
 // addTorrentFile adds a torrent from a local file
 func (m *MainView) addTorrentFile(filePath string) tea.Cmd {
 	m.showAddDialog = false
@@ -1543,5 +1929,124 @@ func (m *MainView) addTorrentURL(url string) tea.Cmd {
 			return errorMsg(fmt.Errorf("failed to add torrent from URL: %w", err))
 		}
 		return successMsg("added torrent from URL")
+	}
+}
+
+// handleSetLocation shows the set location dialog for the selected torrent
+func (m *MainView) handleSetLocation() tea.Cmd {
+	selectedHash := m.getSelectedTorrentHash()
+	if selectedHash == "" {
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("no torrent selected"))
+		}
+	}
+
+	// Find the selected torrent to read its current save path and name
+	var savePath, torrentName string
+	found := false
+	for _, torrent := range m.torrents {
+		if torrent.Hash == selectedHash {
+			savePath = torrent.SavePath
+			torrentName = torrent.Name
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return func() tea.Msg {
+			return errorMsg(fmt.Errorf("selected torrent not found"))
+		}
+	}
+
+	// Store hash and name for later use (avoiding stale pointer issues)
+	m.locationTargetHash = selectedHash
+	m.locationTargetName = torrentName
+	m.locationDialog = NewLocationDialog(m.apiClient, savePath, torrentName)
+	m.showLocationDialog = true
+
+	// Trigger initial directory load if in browser mode
+	return m.loadDirectoryContent(m.locationDialog.remoteNav.currentPath)
+}
+
+// confirmSetLocation performs the location change
+func (m *MainView) confirmSetLocation(newLocation string) tea.Cmd {
+	if m.locationTargetHash == "" {
+		return nil
+	}
+
+	hash := m.locationTargetHash
+	torrentName := m.locationTargetName
+
+	// Close dialog and clear state
+	m.showLocationDialog = false
+	m.locationTargetHash = ""
+	m.locationTargetName = ""
+	m.locationDialog = nil
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := m.apiClient.SetTorrentLocation(ctx, []string{hash}, newLocation)
+		if err != nil {
+			return errorMsg(fmt.Errorf("failed to set location: %w", err))
+		}
+		// Return success message with name and path
+		successText := fmt.Sprintf("%s -> %s", styles.TruncateString(torrentName, 30), newLocation)
+		return successMsg(successText)
+	}
+}
+
+// cancelSetLocation cancels the set location operation
+func (m *MainView) cancelSetLocation() {
+	m.showLocationDialog = false
+	m.locationTargetHash = ""
+	m.locationTargetName = ""
+	m.locationDialog = nil
+}
+
+// loadDirectoryContent loads directory contents from the qBittorrent server
+func (m *MainView) loadDirectoryContent(path string) tea.Cmd {
+	if m.locationDialog == nil || m.locationDialog.remoteNav == nil {
+		return nil
+	}
+
+	// Mark as loading
+	m.locationDialog.remoteNav.loading = true
+	m.locationDialog.remoteNav.loadError = nil
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		dirs, err := m.apiClient.GetDirectoryContent(ctx, path, "dirs")
+		return directoryContentMsg{
+			path:        path,
+			directories: dirs,
+			err:         err,
+		}
+	}
+}
+
+// NewLocationDialog creates a new location dialog
+func NewLocationDialog(apiClient api.ClientInterface, currentPath, torrentName string) *LocationDialog {
+	// Start with the directory containing the torrent (not the full save path)
+	startPath := currentPath
+	if startPath == "" {
+		startPath = "/"
+	}
+
+	remoteNav := &RemoteFileNavigator{
+		apiClient:   apiClient,
+		currentPath: startPath,
+		directories: []string{},
+		selectedIdx: 0,
+		loading:     false,
+		loadError:   nil,
+	}
+
+	return &LocationDialog{
+		mode:        LocationModeText, // Start with text input by default
+		remoteNav:   remoteNav,
+		pathInput:   &PathInput{path: currentPath, cursor: len(currentPath)},
+		currentPath: currentPath,
+		torrentName: torrentName,
 	}
 }

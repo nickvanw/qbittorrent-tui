@@ -320,6 +320,39 @@ func (m *MockClient) AddTorrentURL(ctx context.Context, url string) error {
 	return nil
 }
 
+// SetTorrentLocation simulates setting a torrent's location
+func (m *MockClient) SetTorrentLocation(ctx context.Context, hashes []string, newLocation string) error {
+	if m.GetError != nil {
+		return m.GetError
+	}
+	if !m.LoggedIn {
+		return fmt.Errorf("authentication required")
+	}
+	// Mock implementation - in real usage this would change the torrent location
+	return nil
+}
+
+// GetDirectoryContent simulates getting directory contents from the server
+func (m *MockClient) GetDirectoryContent(ctx context.Context, path string, mode string) ([]string, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+	// Mock implementation - return sample directories
+	switch path {
+	case "/":
+		return []string{"/home", "/downloads", "/media", "/tmp"}, nil
+	case "/downloads":
+		return []string{"/downloads/complete", "/downloads/incomplete", "/downloads/torrents"}, nil
+	case "/media":
+		return []string{"/media/movies", "/media/tv", "/media/music"}, nil
+	default:
+		return []string{}, nil
+	}
+}
+
 // SetupMockClientWithData creates a mock client with predefined test data
 func SetupMockClientWithData() *MockClient {
 	client := NewMockClient()
