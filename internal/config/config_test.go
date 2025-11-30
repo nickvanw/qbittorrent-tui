@@ -161,6 +161,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -177,6 +181,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 3,
 				},
@@ -201,6 +209,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 0,
 				},
@@ -225,6 +237,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 3,
 					DefaultSort: struct {
@@ -255,6 +271,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 3,
 					DefaultSort: struct {
@@ -286,6 +306,10 @@ func TestConfigValidation(t *testing.T) {
 						Column    string `mapstructure:"column"`
 						Direction string `mapstructure:"direction"`
 					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
 				}{
 					RefreshInterval: 3,
 					DefaultSort: struct {
@@ -294,6 +318,109 @@ func TestConfigValidation(t *testing.T) {
 					}{
 						Column:    "size",
 						Direction: "desc",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid terminal title template",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+					TerminalTitle: struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					}{
+						Enabled:  true,
+						Template: "qbt - {invalid_variable}",
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "ui.terminal_title.template is invalid: unknown variable: {invalid_variable}",
+		},
+		{
+			name: "valid terminal title template",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+					TerminalTitle: struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					}{
+						Enabled:  true,
+						Template: "qbt [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}",
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty terminal title template is valid",
+			config: Config{
+				Server: struct {
+					URL      string `mapstructure:"url"`
+					Username string `mapstructure:"username"`
+					Password string `mapstructure:"password"`
+				}{
+					URL: "http://localhost:8080",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+					TerminalTitle: struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					}{
+						Enabled:  false,
+						Template: "",
 					},
 				},
 			},

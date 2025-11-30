@@ -63,9 +63,13 @@ EXAMPLES:
     url = "http://localhost:8080"
     username = "admin"
     password = "secret"
-    
+
     [ui]
     refresh_interval = 5
+
+    [ui.terminal_title]
+    enabled = true
+    template = "qbt-tui [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}"
 
 KEYBOARD SHORTCUTS:
   Navigation:
