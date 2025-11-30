@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -328,6 +329,48 @@ func TestSetTerminalTitle(t *testing.T) {
 			// Should be the expected format: ESC]0;title\007
 			expected := "\033]0;" + tt.title + "\007"
 			assert.Equal(t, expected, result)
+		})
+	}
+}
+
+func TestRenderTitleNoANSICodes(t *testing.T) {
+	// Test that rendered titles contain no ANSI escape codes
+	// Terminal titles should be plain text only
+	data := TitleData{
+		DlSpeed:           1024 * 1024,            // 1 MB/s
+		UpSpeed:           512 * 1024,             // 512 KB/s
+		SessionDownloaded: 5 * 1024 * 1024 * 1024, // 5 GB
+		SessionUploaded:   2 * 1024 * 1024 * 1024, // 2 GB
+		ServerURL:         "localhost:8080",
+		ActiveTorrents:    5,
+		TotalTorrents:     20,
+		DlTorrents:        3,
+		UpTorrents:        10,
+		PausedTorrents:    7,
+	}
+
+	templates := []string{
+		"qbt - ↓{dl_speed} ↑{up_speed}",
+		"{active_torrents}/{total_torrents}",
+		"Session: ↓{session_downloaded} ↑{session_uploaded}",
+		"qbt [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}",
+	}
+
+	// Regex to detect ANSI escape codes
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07`)
+
+	for _, template := range templates {
+		t.Run(template, func(t *testing.T) {
+			result, err := RenderTitle(template, data)
+			require.NoError(t, err)
+
+			// Check for ANSI escape codes
+			if ansiRegex.MatchString(result) {
+				t.Errorf("Rendered title contains ANSI escape codes: %q", result)
+			}
+
+			// Verify it contains expected plain text elements
+			assert.NotEmpty(t, result)
 		})
 	}
 }
