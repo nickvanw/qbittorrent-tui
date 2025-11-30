@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
-	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 )
 
 // TitleData contains all data available for terminal title templates
@@ -30,6 +29,27 @@ func SetTerminalTitle(title string) string {
 	return fmt.Sprintf("\033]0;%s\007", title)
 }
 
+// formatSpeed formats bytes per second into plain text human-readable format
+// This is specifically for terminal titles and does not include any ANSI codes
+func formatSpeed(bytesPerSec int64) string {
+	return formatBytes(bytesPerSec) + "/s"
+}
+
+// formatBytes formats bytes into plain text human-readable format
+// This is specifically for terminal titles and does not include any ANSI codes
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // RenderTitle renders a title template with the provided data
 // Template uses {variable} syntax for placeholders
 func RenderTitle(template string, data TitleData) (string, error) {
@@ -39,12 +59,12 @@ func RenderTitle(template string, data TitleData) (string, error) {
 
 	result := template
 
-	// Define variable mappings
+	// Define variable mappings using plain text formatting (no ANSI codes)
 	variables := map[string]string{
-		"{dl_speed}":           styles.FormatSpeed(data.DlSpeed),
-		"{up_speed}":           styles.FormatSpeed(data.UpSpeed),
-		"{session_downloaded}": styles.FormatBytes(data.SessionDownloaded),
-		"{session_uploaded}":   styles.FormatBytes(data.SessionUploaded),
+		"{dl_speed}":           formatSpeed(data.DlSpeed),
+		"{up_speed}":           formatSpeed(data.UpSpeed),
+		"{session_downloaded}": formatBytes(data.SessionDownloaded),
+		"{session_uploaded}":   formatBytes(data.SessionUploaded),
 		"{server_url}":         data.ServerURL,
 		"{active_torrents}":    fmt.Sprintf("%d", data.ActiveTorrents),
 		"{total_torrents}":     fmt.Sprintf("%d", data.TotalTorrents),
