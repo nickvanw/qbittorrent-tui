@@ -19,6 +19,7 @@ import (
 	"github.com/nickvanw/qbittorrent-tui/internal/filter"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/components"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
+	"github.com/nickvanw/qbittorrent-tui/internal/ui/terminal"
 )
 
 // Removed FocusPane - using single-focus design with torrent list always focused
@@ -148,6 +149,9 @@ type MainView struct {
 	lastSuccess     string
 	isLoading       bool
 	lastRefreshTime time.Time // Track when data was last refreshed
+
+	// Terminal title state
+	lastRenderedTitle string // Cache to avoid unnecessary terminal writes
 
 	// Delete confirmation dialog state
 	showDeleteDialog bool
@@ -297,6 +301,7 @@ func (m *MainView) Init() tea.Cmd {
 		m.fetchAllData(),
 		m.tickCmd(),
 		m.uiTickCmd(),
+		m.updateTerminalTitle(),
 	)
 }
 
@@ -438,11 +443,17 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Update terminal title after torrent data received
+		cmds = append(cmds, m.updateTerminalTitle())
+
 	case statsDataMsg:
 		m.stats = (*api.GlobalStats)(msg)
 		m.statsPanel.SetStats(m.stats)
 		m.isLoading = false
 		m.lastRefreshTime = time.Now()
+
+		// Update terminal title after stats received
+		cmds = append(cmds, m.updateTerminalTitle())
 
 	case categoriesDataMsg:
 		m.categories = map[string]interface{}(msg)
@@ -2048,5 +2059,54 @@ func NewLocationDialog(apiClient api.ClientInterface, currentPath, torrentName s
 		pathInput:   &PathInput{path: currentPath, cursor: len(currentPath)},
 		currentPath: currentPath,
 		torrentName: torrentName,
+	}
+}
+
+// updateTerminalTitle updates the terminal window title if enabled
+func (m *MainView) updateTerminalTitle() tea.Cmd {
+	// Skip if disabled or no template
+	if !m.config.UI.TerminalTitle.Enabled || m.config.UI.TerminalTitle.Template == "" {
+		return nil
+	}
+
+	// Calculate torrent counts
+	activeTorrents, dlTorrents, upTorrents, pausedTorrents := terminal.CalculateTorrentCounts(m.allTorrents)
+
+	// Build title data
+	titleData := terminal.TitleData{
+		ServerURL:      m.config.Server.URL,
+		TotalTorrents:  len(m.allTorrents),
+		ActiveTorrents: activeTorrents,
+		DlTorrents:     dlTorrents,
+		UpTorrents:     upTorrents,
+		PausedTorrents: pausedTorrents,
+	}
+
+	// Add stats if available
+	if m.stats != nil {
+		titleData.DlSpeed = m.stats.DlInfoSpeed
+		titleData.UpSpeed = m.stats.UpInfoSpeed
+		titleData.SessionDownloaded = m.stats.DlInfoData
+		titleData.SessionUploaded = m.stats.UpInfoData
+	}
+
+	// Render title template
+	renderedTitle, err := terminal.RenderTitle(m.config.UI.TerminalTitle.Template, titleData)
+	if err != nil {
+		// If template rendering fails, don't update title
+		return nil
+	}
+
+	// Only update if changed (avoid unnecessary writes)
+	if renderedTitle == m.lastRenderedTitle {
+		return nil
+	}
+
+	m.lastRenderedTitle = renderedTitle
+
+	// Return command to set terminal title
+	return func() tea.Msg {
+		fmt.Print(terminal.SetTerminalTitle(renderedTitle))
+		return nil
 	}
 }

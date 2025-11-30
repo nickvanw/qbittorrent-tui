@@ -13,6 +13,7 @@ A terminal-based user interface for monitoring and managing qBittorrent. Built w
 - **Intuitive navigation** - Vim-like keyboard shortcuts and responsive layout
 - **Flexible configuration** - TOML config files, environment variables, or CLI flags
 - **Column customization** - Sort by any column and show/hide 14+ available columns
+- **Terminal title** - Customizable terminal window/tab title with dynamic stats
 
 ## Installation
 
@@ -67,6 +68,41 @@ export QBT_SERVER_PASSWORD="secret"
 # CLI
 qbt-tui --url http://localhost:8080 --username admin --password secret
 qbt-tui --help  # See all options
+```
+
+### Terminal Title
+
+Customize your terminal window/tab title with dynamic information (disabled by default):
+
+```toml
+[ui.terminal_title]
+enabled = true
+template = "qbt-tui [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}"
+```
+
+**Available Variables:**
+- `{dl_speed}`, `{up_speed}` - Download/upload speeds
+- `{session_downloaded}`, `{session_uploaded}` - Session totals
+- `{active_torrents}`, `{total_torrents}` - Torrent counts
+- `{dl_torrents}`, `{up_torrents}`, `{paused_torrents}` - By state
+- `{server_url}` - Server URL
+
+**Example Templates:**
+```toml
+# Minimal
+template = "qbt: ↓{dl_speed} ↑{up_speed}"
+
+# Detailed breakdown
+template = "qbt [D:{dl_torrents} U:{up_torrents} P:{paused_torrents}] ↓{dl_speed} ↑{up_speed}"
+
+# With session totals
+template = "qbt - ↓{dl_speed} ↑{up_speed} | Session: ↓{session_downloaded} ↑{session_uploaded}"
+```
+
+**Environment Variables:**
+```bash
+export QBT_UI_TERMINAL_TITLE_ENABLED=true
+export QBT_UI_TERMINAL_TITLE_TEMPLATE="qbt [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}"
 ```
 
 ## Keyboard Shortcuts

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/components"
+	"github.com/nickvanw/qbittorrent-tui/internal/ui/terminal"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -26,6 +27,10 @@ type Config struct {
 			Column    string `mapstructure:"column"`
 			Direction string `mapstructure:"direction"`
 		} `mapstructure:"default_sort"`
+		TerminalTitle struct {
+			Enabled  bool   `mapstructure:"enabled"`
+			Template string `mapstructure:"template"`
+		} `mapstructure:"terminal_title"`
 	} `mapstructure:"ui"`
 }
 
@@ -39,6 +44,8 @@ func Load(cmd *cobra.Command) (*Config, error) {
 
 	// Set defaults
 	viper.SetDefault("ui.refresh_interval", 3)
+	viper.SetDefault("ui.terminal_title.enabled", false)
+	viper.SetDefault("ui.terminal_title.template", "qbt-tui [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}")
 
 	// Set up environment variable binding
 	viper.SetEnvPrefix("QBT")
@@ -53,6 +60,8 @@ func Load(cmd *cobra.Command) (*Config, error) {
 	viper.BindEnv("ui.columns", "QBT_UI_COLUMNS")
 	viper.BindEnv("ui.default_sort.column", "QBT_UI_DEFAULT_SORT_COLUMN")
 	viper.BindEnv("ui.default_sort.direction", "QBT_UI_DEFAULT_SORT_DIRECTION")
+	viper.BindEnv("ui.terminal_title.enabled", "QBT_UI_TERMINAL_TITLE_ENABLED")
+	viper.BindEnv("ui.terminal_title.template", "QBT_UI_TERMINAL_TITLE_TEMPLATE")
 
 	// Read config file if it exists
 	if err := viper.ReadInConfig(); err != nil {
@@ -112,6 +121,13 @@ func (c *Config) validate() error {
 	if c.UI.DefaultSort.Direction != "" {
 		if c.UI.DefaultSort.Direction != "asc" && c.UI.DefaultSort.Direction != "desc" {
 			return fmt.Errorf("ui.default_sort.direction must be either 'asc' or 'desc'")
+		}
+	}
+
+	// Validate terminal title template if provided
+	if c.UI.TerminalTitle.Template != "" {
+		if err := terminal.ValidateTemplate(c.UI.TerminalTitle.Template); err != nil {
+			return fmt.Errorf("ui.terminal_title.template is invalid: %w", err)
 		}
 	}
 

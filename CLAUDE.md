@@ -64,6 +64,7 @@ gh pr list
 - ✅ **Advanced filtering** - State, category, tracker, tag, and text search
 - ✅ **Real-time updates** - Configurable refresh interval
 - ✅ **Torrent details** - Drill-down view with Enter key
+- ✅ **Terminal title** - Customizable terminal window title with template support
 
 ## Configuration
 
@@ -80,7 +81,15 @@ QBT_SERVER_URL=http://localhost:8080 qbt-tui
 url = "http://localhost:8080"
 username = "admin"
 password = "secret"
+
+[ui.terminal_title]
+enabled = false  # Disabled by default - opt-in feature
+template = "qbt-tui [{active_torrents}/{total_torrents}] ↓{dl_speed} ↑{up_speed}"
 ```
+
+### Terminal Title
+
+Customizable terminal window title with 10 template variables. See README for full documentation.
 
 ## Test Coverage
 - API package: 80.5%
