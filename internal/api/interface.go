@@ -10,6 +10,7 @@ type ClientInterface interface {
 	// Torrent operations
 	GetTorrents(ctx context.Context) ([]Torrent, error)
 	GetTorrentsFiltered(ctx context.Context, filter map[string]string) ([]Torrent, error)
+	SyncMainData(ctx context.Context, rid int) (*SyncMainDataResponse, error)
 	GetTorrentProperties(ctx context.Context, hash string) (*TorrentProperties, error)
 
 	// Torrent details

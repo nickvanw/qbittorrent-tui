@@ -58,6 +58,27 @@ type ServerState struct {
 	FreeSpaceOnDisk  int64  `json:"free_space_on_disk"`
 }
 
+// SyncMainDataResponse represents the full response from /api/v2/sync/maindata
+// This endpoint provides incremental updates to reduce bandwidth usage
+type SyncMainDataResponse struct {
+	RID               int                 `json:"rid"`                // Response ID for tracking incremental updates
+	FullUpdate        bool                `json:"full_update"`        // Whether this is a full update (true) or incremental (false)
+	Torrents          map[string]Torrent  `json:"torrents"`           // Map of hash -> torrent data (only changed torrents in incremental updates)
+	TorrentsRemoved   []string            `json:"torrents_removed"`   // List of torrent hashes removed since last request
+	Categories        map[string]Category `json:"categories"`         // Categories added/updated since last request
+	CategoriesRemoved []string            `json:"categories_removed"` // Categories removed since last request
+	Tags              []string            `json:"tags"`               // Tags added since last request
+	TagsRemoved       []string            `json:"tags_removed"`       // Tags removed since last request
+	ServerState       ServerState         `json:"server_state"`       // Current server state (always included)
+}
+
+// Category represents a torrent category
+type Category struct {
+	Name         string `json:"name"`
+	SavePath     string `json:"savePath"`
+	DownloadPath string `json:"download_path"`
+}
+
 type TorrentProperties struct {
 	SavePath               string  `json:"save_path"`
 	CreationDate           int64   `json:"creation_date"`

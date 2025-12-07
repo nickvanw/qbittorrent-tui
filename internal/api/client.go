@@ -110,6 +110,20 @@ func (c *Client) GetTorrentsFiltered(ctx context.Context, filter map[string]stri
 	return torrents, nil
 }
 
+// SyncMainData fetches incremental updates from the qBittorrent sync API
+// Pass rid=0 for the first request to get all data, then use the returned rid
+// for subsequent requests to get only changes since the last request
+func (c *Client) SyncMainData(ctx context.Context, rid int) (*SyncMainDataResponse, error) {
+	endpoint := fmt.Sprintf("/api/v2/sync/maindata?rid=%d", rid)
+
+	var response SyncMainDataResponse
+	if err := c.get(ctx, endpoint, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
 	// Get transfer info
 	var stats GlobalStats

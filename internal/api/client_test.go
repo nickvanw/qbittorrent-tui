@@ -613,3 +613,44 @@ func TestGetDirectoryContent(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "authentication required")
 }
+
+func TestSyncMainData(t *testing.T) {
+	mock := NewMockClient()
+	mock.LoggedIn = true
+	mock.Torrents = GenerateMockTorrents(3)
+	mock.Tags = []string{"test", "hd"}
+	mock.Categories = map[string]interface{}{
+		"movies": map[string]interface{}{"name": "Movies", "savePath": "/downloads/movies"},
+	}
+	ctx := context.Background()
+
+	// Test first request (rid=0) should return full update
+	syncData, err := mock.SyncMainData(ctx, 0)
+	assert.NoError(t, err)
+	assert.NotNil(t, syncData)
+	assert.True(t, syncData.FullUpdate, "First request should be a full update")
+	assert.Equal(t, 1, syncData.RID, "RID should be incremented")
+	assert.Len(t, syncData.Torrents, 3, "Should return all 3 torrents")
+	assert.Len(t, syncData.Tags, 2, "Should return all tags")
+	assert.Len(t, syncData.Categories, 1, "Should return all categories")
+	assert.NotNil(t, syncData.ServerState, "ServerState should be populated")
+
+	// Test subsequent request (rid > 0) should return incremental update
+	syncData2, err := mock.SyncMainData(ctx, syncData.RID)
+	assert.NoError(t, err)
+	assert.NotNil(t, syncData2)
+	assert.False(t, syncData2.FullUpdate, "Subsequent request should be incremental")
+	assert.Equal(t, 2, syncData2.RID, "RID should be incremented again")
+
+	// Test authentication required
+	mock.LoggedIn = false
+	_, err = mock.SyncMainData(ctx, 0)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+
+	// Test with error
+	mock.LoggedIn = true
+	mock.GetError = assert.AnError
+	_, err = mock.SyncMainData(ctx, 0)
+	assert.Error(t, err)
+}
