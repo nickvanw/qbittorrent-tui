@@ -107,6 +107,7 @@ const (
 // Message types
 type (
 	torrentDataMsg      []api.Torrent
+	syncDataMsg         *api.SyncMainDataResponse
 	statsDataMsg        *api.GlobalStats
 	categoriesDataMsg   map[string]interface{}
 	tagsDataMsg         []string
@@ -138,7 +139,9 @@ type MainView struct {
 
 	// State
 	torrents        []api.Torrent
-	allTorrents     []api.Torrent // unfiltered torrents
+	allTorrents     []api.Torrent          // unfiltered torrents
+	torrentMap      map[string]api.Torrent // hash -> torrent for sync API
+	currentRID      int                    // Current RID for sync API incremental updates
 	stats           *api.GlobalStats
 	categories      map[string]interface{}
 	tags            []string
@@ -292,6 +295,8 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 		keys:           DefaultKeyMap(),
 		viewMode:       ViewModeMain,
 		addDialog:      NewAddTorrentDialog(cwd),
+		torrentMap:     make(map[string]api.Torrent), // Initialize torrent map for sync API
+		currentRID:     0,                            // Start with RID 0 for first full update
 	}
 }
 
@@ -321,15 +326,15 @@ func (m *MainView) fetchAllData() tea.Cmd {
 	)
 }
 
-// fetchTorrents fetches torrent data
+// fetchTorrents fetches torrent data using the sync API for incremental updates
 func (m *MainView) fetchTorrents() tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		ctx := context.Background()
-		torrents, err := m.apiClient.GetTorrents(ctx)
+		syncData, err := m.apiClient.SyncMainData(ctx, m.currentRID)
 		if err != nil {
 			return errorMsg(err)
 		}
-		return torrentDataMsg(torrents)
+		return syncDataMsg(syncData)
 	})
 }
 
@@ -417,27 +422,82 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.updateDimensions()
 
-	case torrentDataMsg:
-		m.allTorrents = []api.Torrent(msg)
+	case syncDataMsg:
+		// Handle incremental updates from sync API
+		syncData := msg
+
+		// Update RID for next request
+		m.currentRID = syncData.RID
+
+		// Handle full update (first request or after disconnection)
+		if syncData.FullUpdate {
+			// Clear existing data and replace with new data
+			m.torrentMap = make(map[string]api.Torrent)
+			for hash, torrent := range syncData.Torrents {
+				torrent.Hash = hash // Ensure hash is set
+				m.torrentMap[hash] = torrent
+			}
+		} else {
+			// Incremental update - apply changes
+			// Update/add changed torrents
+			for hash, torrent := range syncData.Torrents {
+				torrent.Hash = hash // Ensure hash is set
+				m.torrentMap[hash] = torrent
+			}
+			// Remove deleted torrents
+			for _, hash := range syncData.TorrentsRemoved {
+				delete(m.torrentMap, hash)
+			}
+		}
+
+		// Convert map to slice for display
+		m.allTorrents = make([]api.Torrent, 0, len(m.torrentMap))
+		for _, torrent := range m.torrentMap {
+			m.allTorrents = append(m.allTorrents, torrent)
+		}
+
+		// Apply filtering
 		m.applyFilter()
 		m.isLoading = false
 		m.lastRefreshTime = time.Now()
-		// Don't auto-clear errors here - let timer handle it
+
+		// Update categories and tags if provided
+		if syncData.Categories != nil && len(syncData.Categories) > 0 {
+			// Convert Category type back to interface{} for compatibility
+			for name, cat := range syncData.Categories {
+				if m.categories == nil {
+					m.categories = make(map[string]interface{})
+				}
+				m.categories[name] = map[string]interface{}{
+					"name":          cat.Name,
+					"savePath":      cat.SavePath,
+					"download_path": cat.DownloadPath,
+				}
+			}
+		}
+		if len(syncData.Tags) > 0 {
+			m.tags = syncData.Tags
+		}
+
+		// Update stats from server state
+		if m.stats == nil {
+			m.stats = &api.GlobalStats{}
+		}
+		m.stats.ConnectionStatus = syncData.ServerState.ConnectionStatus
+		m.stats.DHTNodes = syncData.ServerState.DHTNodes
+		m.stats.DlInfoSpeed = syncData.ServerState.DlInfoSpeed
+		m.stats.UpInfoSpeed = syncData.ServerState.UpInfoSpeed
+		m.stats.DlInfoData = syncData.ServerState.DlInfoData
+		m.stats.UpInfoData = syncData.ServerState.UpInfoData
+		m.stats.FreeSpaceOnDisk = syncData.ServerState.FreeSpaceOnDisk
 
 		// Update torrent details if currently viewing a torrent
 		if m.viewMode == ViewModeDetails && m.detailsViewHash != "" {
-			// Search in ALL torrents (not just filtered ones)
-			torrentFound := false
-			for _, torrent := range m.allTorrents {
-				if torrent.Hash == m.detailsViewHash {
-					m.torrentDetails.UpdateTorrent(&torrent)
-					torrentFound = true
-					break
-				}
-			}
-
-			// If torrent no longer exists (deleted), exit details mode
-			if !torrentFound {
+			// Check if torrent still exists in map
+			if torrent, found := m.torrentMap[m.detailsViewHash]; found {
+				m.torrentDetails.UpdateTorrent(&torrent)
+			} else {
+				// Torrent was deleted, exit details mode
 				m.viewMode = ViewModeMain
 				m.detailsViewHash = ""
 			}

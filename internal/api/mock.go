@@ -19,6 +19,7 @@ type MockClient struct {
 	LoginError        error
 	GetError          error
 	LoggedIn          bool
+	currentRID        int // Track current RID for sync API
 }
 
 // NewMockClient creates a new mock client with default test data
@@ -61,6 +62,43 @@ func (m *MockClient) GetTorrents(ctx context.Context) ([]Torrent, error) {
 
 func (m *MockClient) GetTorrentsFiltered(ctx context.Context, filter map[string]string) ([]Torrent, error) {
 	return m.GetTorrents(ctx)
+}
+
+func (m *MockClient) SyncMainData(ctx context.Context, rid int) (*SyncMainDataResponse, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+
+	// Convert torrents array to map
+	torrentsMap := make(map[string]Torrent)
+	for _, t := range m.Torrents {
+		torrentsMap[t.Hash] = t
+	}
+
+	// Increment RID for next request
+	m.currentRID++
+
+	// Convert categories to Category type
+	categoriesMap := make(map[string]Category)
+	for name := range m.Categories {
+		categoriesMap[name] = Category{
+			Name:     name,
+			SavePath: "/downloads/" + name,
+		}
+	}
+
+	return &SyncMainDataResponse{
+		RID:             m.currentRID,
+		FullUpdate:      rid == 0, // Full update if this is the first request
+		Torrents:        torrentsMap,
+		TorrentsRemoved: []string{},
+		Categories:      categoriesMap,
+		Tags:            m.Tags,
+		ServerState:     m.GlobalStats.toServerState(),
+	}, nil
 }
 
 func (m *MockClient) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
@@ -350,6 +388,19 @@ func (m *MockClient) GetDirectoryContent(ctx context.Context, path string, mode 
 		return []string{"/media/movies", "/media/tv", "/media/music"}, nil
 	default:
 		return []string{}, nil
+	}
+}
+
+// toServerState converts GlobalStats to ServerState for sync API responses
+func (g *GlobalStats) toServerState() ServerState {
+	return ServerState{
+		ConnectionStatus: g.ConnectionStatus,
+		DHTNodes:         g.DHTNodes,
+		DlInfoSpeed:      g.DlInfoSpeed,
+		UpInfoSpeed:      g.UpInfoSpeed,
+		DlInfoData:       g.DlInfoData,
+		UpInfoData:       g.UpInfoData,
+		FreeSpaceOnDisk:  g.FreeSpaceOnDisk,
 	}
 }
 
