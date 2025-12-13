@@ -654,3 +654,94 @@ func TestSyncMainData(t *testing.T) {
 	_, err = mock.SyncMainData(ctx, 0)
 	assert.Error(t, err)
 }
+
+func TestPartialTorrentApplyTo(t *testing.T) {
+	// Test that ApplyTo correctly distinguishes between nil (not present) and zero values
+	t.Run("nil fields are not applied", func(t *testing.T) {
+		existing := Torrent{
+			Hash:     "abc123",
+			Name:     "Original Name",
+			Size:     1000,
+			Progress: 0.5,
+			DlSpeed:  5000,
+			UpSpeed:  2000,
+			State:    "downloading",
+		}
+
+		// Partial with only DlSpeed set (to 0 - a valid value)
+		zero := int64(0)
+		partial := PartialTorrent{
+			DlSpeed: &zero, // Explicitly set to 0
+			// All other fields are nil (not present in JSON)
+		}
+
+		partial.ApplyTo(&existing)
+
+		// DlSpeed should be updated to 0 (was explicitly set)
+		assert.Equal(t, int64(0), existing.DlSpeed, "DlSpeed should be updated to 0")
+
+		// All other fields should remain unchanged (were nil in partial)
+		assert.Equal(t, "abc123", existing.Hash, "Hash should be unchanged")
+		assert.Equal(t, "Original Name", existing.Name, "Name should be unchanged")
+		assert.Equal(t, int64(1000), existing.Size, "Size should be unchanged")
+		assert.Equal(t, 0.5, existing.Progress, "Progress should be unchanged")
+		assert.Equal(t, int64(2000), existing.UpSpeed, "UpSpeed should be unchanged")
+		assert.Equal(t, "downloading", existing.State, "State should be unchanged")
+	})
+
+	t.Run("zero values are applied when field is present", func(t *testing.T) {
+		existing := Torrent{
+			Hash:     "abc123",
+			Name:     "Original Name",
+			Progress: 0.75,
+			DlSpeed:  5000,
+			Ratio:    1.5,
+		}
+
+		// Partial with multiple fields explicitly set to zero
+		zero64 := int64(0)
+		zeroFloat := 0.0
+		emptyStr := ""
+		partial := PartialTorrent{
+			DlSpeed:  &zero64,    // Torrent stopped downloading
+			Progress: &zeroFloat, // This would be unusual but should work
+			Category: &emptyStr,  // Category removed (empty string)
+		}
+
+		partial.ApplyTo(&existing)
+
+		assert.Equal(t, int64(0), existing.DlSpeed, "DlSpeed should be 0")
+		assert.Equal(t, 0.0, existing.Progress, "Progress should be 0")
+		assert.Equal(t, "", existing.Category, "Category should be empty")
+
+		// Unchanged fields
+		assert.Equal(t, "abc123", existing.Hash)
+		assert.Equal(t, "Original Name", existing.Name)
+		assert.Equal(t, 1.5, existing.Ratio)
+	})
+
+	t.Run("ToTorrent creates torrent from partial", func(t *testing.T) {
+		name := "Test Torrent"
+		size := int64(1024)
+		progress := 0.5
+		state := "downloading"
+
+		partial := PartialTorrent{
+			Name:     &name,
+			Size:     &size,
+			Progress: &progress,
+			State:    &state,
+		}
+
+		torrent := partial.ToTorrent()
+
+		assert.Equal(t, "Test Torrent", torrent.Name)
+		assert.Equal(t, int64(1024), torrent.Size)
+		assert.Equal(t, 0.5, torrent.Progress)
+		assert.Equal(t, "downloading", torrent.State)
+
+		// Fields not set should be zero values
+		assert.Equal(t, "", torrent.Hash)
+		assert.Equal(t, int64(0), torrent.DlSpeed)
+	})
+}

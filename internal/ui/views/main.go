@@ -106,7 +106,6 @@ const (
 
 // Message types
 type (
-	torrentDataMsg      []api.Torrent
 	syncDataMsg         *api.SyncMainDataResponse
 	statsDataMsg        *api.GlobalStats
 	categoriesDataMsg   map[string]interface{}
@@ -433,16 +432,25 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if syncData.FullUpdate {
 			// Clear existing data and replace with new data
 			m.torrentMap = make(map[string]api.Torrent)
-			for hash, torrent := range syncData.Torrents {
+			for hash, partial := range syncData.Torrents {
+				torrent := partial.ToTorrent()
 				torrent.Hash = hash // Ensure hash is set
 				m.torrentMap[hash] = torrent
 			}
 		} else {
-			// Incremental update - apply changes
-			// Update/add changed torrents
-			for hash, torrent := range syncData.Torrents {
-				torrent.Hash = hash // Ensure hash is set
-				m.torrentMap[hash] = torrent
+			// Incremental update - apply only changed fields using pointer-based detection
+			for hash, partial := range syncData.Torrents {
+				if existing, exists := m.torrentMap[hash]; exists {
+					// Merge partial data into existing torrent (only non-nil fields are updated)
+					partial.ApplyTo(&existing)
+					existing.Hash = hash // Ensure hash is set
+					m.torrentMap[hash] = existing
+				} else {
+					// New torrent - convert partial to full torrent
+					torrent := partial.ToTorrent()
+					torrent.Hash = hash
+					m.torrentMap[hash] = torrent
+				}
 			}
 			// Remove deleted torrents
 			for _, hash := range syncData.TorrentsRemoved {
@@ -461,13 +469,13 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isLoading = false
 		m.lastRefreshTime = time.Now()
 
-		// Update categories and tags if provided
+		// Update categories if provided (incremental: add/update new, remove deleted)
 		if syncData.Categories != nil && len(syncData.Categories) > 0 {
-			// Convert Category type back to interface{} for compatibility
+			if m.categories == nil {
+				m.categories = make(map[string]interface{})
+			}
+			// Add or update categories
 			for name, cat := range syncData.Categories {
-				if m.categories == nil {
-					m.categories = make(map[string]interface{})
-				}
 				m.categories[name] = map[string]interface{}{
 					"name":          cat.Name,
 					"savePath":      cat.SavePath,
@@ -475,8 +483,37 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		// Remove deleted categories
+		for _, name := range syncData.CategoriesRemoved {
+			delete(m.categories, name)
+		}
+
+		// Update tags (incremental: add new, remove deleted)
 		if len(syncData.Tags) > 0 {
-			m.tags = syncData.Tags
+			// In incremental updates, Tags contains only newly added tags
+			// Append them to existing tags (avoiding duplicates)
+			for _, newTag := range syncData.Tags {
+				found := false
+				for _, existingTag := range m.tags {
+					if existingTag == newTag {
+						found = true
+						break
+					}
+				}
+				if !found {
+					m.tags = append(m.tags, newTag)
+				}
+			}
+			sort.Strings(m.tags)
+		}
+		// Remove deleted tags
+		for _, removedTag := range syncData.TagsRemoved {
+			for i, tag := range m.tags {
+				if tag == removedTag {
+					m.tags = append(m.tags[:i], m.tags[i+1:]...)
+					break
+				}
+			}
 		}
 
 		// Update stats from server state
