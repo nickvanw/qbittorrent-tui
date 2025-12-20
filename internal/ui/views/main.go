@@ -17,6 +17,7 @@ import (
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
 	"github.com/nickvanw/qbittorrent-tui/internal/filter"
+	"github.com/nickvanw/qbittorrent-tui/internal/logger"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/components"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/terminal"
@@ -318,8 +319,7 @@ func (m *MainView) fetchAllData() tea.Cmd {
 	}
 
 	return tea.Batch(
-		m.fetchTorrents(),
-		m.fetchStats(),
+		m.fetchTorrents(), // Gets torrents + stats via sync API
 		m.fetchCategories(),
 		m.fetchTags(),
 	)
@@ -329,6 +329,10 @@ func (m *MainView) fetchAllData() tea.Cmd {
 func (m *MainView) fetchTorrents() tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		ctx := context.Background()
+
+		// Log the RID we're sending
+		logger.Debug("Requesting sync data", "rid", m.currentRID)
+
 		syncData, err := m.apiClient.SyncMainData(ctx, m.currentRID)
 		if err != nil {
 			return errorMsg(err)
@@ -337,17 +341,6 @@ func (m *MainView) fetchTorrents() tea.Cmd {
 	})
 }
 
-// fetchStats fetches global statistics
-func (m *MainView) fetchStats() tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		ctx := context.Background()
-		stats, err := m.apiClient.GetGlobalStats(ctx)
-		if err != nil {
-			return errorMsg(err)
-		}
-		return statsDataMsg(stats)
-	})
-}
 
 // fetchCategories fetches categories
 func (m *MainView) fetchCategories() tea.Cmd {
@@ -424,6 +417,9 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case syncDataMsg:
 		// Handle incremental updates from sync API
 		syncData := msg
+
+		// Log sync update if debug logging is enabled
+		logger.LogSyncUpdate(syncData)
 
 		// Update RID for next request
 		m.currentRID = syncData.RID
@@ -520,13 +516,31 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.stats == nil {
 			m.stats = &api.GlobalStats{}
 		}
-		m.stats.ConnectionStatus = syncData.ServerState.ConnectionStatus
-		m.stats.DHTNodes = syncData.ServerState.DHTNodes
-		m.stats.DlInfoSpeed = syncData.ServerState.DlInfoSpeed
-		m.stats.UpInfoSpeed = syncData.ServerState.UpInfoSpeed
-		m.stats.DlInfoData = syncData.ServerState.DlInfoData
-		m.stats.UpInfoData = syncData.ServerState.UpInfoData
-		m.stats.FreeSpaceOnDisk = syncData.ServerState.FreeSpaceOnDisk
+		// Only update fields if they're present (non-nil) in ServerState
+		if syncData.ServerState.ConnectionStatus != nil {
+			m.stats.ConnectionStatus = *syncData.ServerState.ConnectionStatus
+		}
+		if syncData.ServerState.DHTNodes != nil {
+			m.stats.DHTNodes = *syncData.ServerState.DHTNodes
+		}
+		if syncData.ServerState.DlInfoSpeed != nil {
+			m.stats.DlInfoSpeed = *syncData.ServerState.DlInfoSpeed
+		}
+		if syncData.ServerState.UpInfoSpeed != nil {
+			m.stats.UpInfoSpeed = *syncData.ServerState.UpInfoSpeed
+		}
+		if syncData.ServerState.DlInfoData != nil {
+			m.stats.DlInfoData = *syncData.ServerState.DlInfoData
+		}
+		if syncData.ServerState.UpInfoData != nil {
+			m.stats.UpInfoData = *syncData.ServerState.UpInfoData
+		}
+		if syncData.ServerState.FreeSpaceOnDisk != nil {
+			m.stats.FreeSpaceOnDisk = *syncData.ServerState.FreeSpaceOnDisk
+		}
+
+		// Update stats panel with latest stats
+		m.statsPanel.SetStats(m.stats)
 
 		// Update torrent details if currently viewing a torrent
 		if m.viewMode == ViewModeDetails && m.detailsViewHash != "" {
@@ -541,15 +555,6 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Update terminal title after torrent data received
-		cmds = append(cmds, m.updateTerminalTitle())
-
-	case statsDataMsg:
-		m.stats = (*api.GlobalStats)(msg)
-		m.statsPanel.SetStats(m.stats)
-		m.isLoading = false
-		m.lastRefreshTime = time.Now()
-
-		// Update terminal title after stats received
 		cmds = append(cmds, m.updateTerminalTitle())
 
 	case categoriesDataMsg:

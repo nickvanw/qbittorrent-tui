@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
+	"github.com/nickvanw/qbittorrent-tui/internal/logger"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/views"
 )
 
@@ -19,6 +20,8 @@ var (
 	username   string
 	password   string
 	refreshInt int
+	debugMode bool
+	logFile   string
 )
 
 func main() {
@@ -109,6 +112,10 @@ func init() {
 	// UI configuration flags
 	rootCmd.Flags().IntVarP(&refreshInt, "refresh", "r", 3, "refresh interval in seconds (default: 3)")
 
+	// Debug/logging flags
+	rootCmd.Flags().BoolVarP(&debugMode, "debug", "d", false, "enable debug logging to file")
+	rootCmd.Flags().StringVar(&logFile, "log-file", "", "path to log file (default: auto-generate in ~/.local/state/qbt-tui/)")
+
 	// Note: Flag binding will be handled in config.Load() to ensure proper precedence
 }
 
@@ -123,6 +130,11 @@ func run(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Initialize logger before starting the TUI
+	if err := logger.Setup(cfg.Debug.Enabled, cfg.Debug.LogFile); err != nil {
+		return fmt.Errorf("failed to setup logger: %w", err)
 	}
 
 	// Create and connect API client

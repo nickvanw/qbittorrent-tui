@@ -131,16 +131,9 @@ func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
 		return nil, err
 	}
 
-	// Get maindata for free disk space
-	var mainData MainData
-	if err := c.get(ctx, "/api/v2/sync/maindata", &mainData); err != nil {
-		// Log warning but don't fail - free space is not critical
-		// In a real app you'd use a proper logger here
-		// For now, just continue with stats.FreeSpaceOnDisk = 0
-	} else {
-		// Merge free space from maindata
-		stats.FreeSpaceOnDisk = mainData.ServerState.FreeSpaceOnDisk
-	}
+	// Note: FreeSpaceOnDisk is now obtained from SyncMainData().ServerState
+	// to avoid interfering with the RID tracking for incremental updates.
+	// The main view will merge this from the sync data.
 
 	return &stats, nil
 }

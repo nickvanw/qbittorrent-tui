@@ -47,15 +47,16 @@ type MainData struct {
 	ServerState ServerState `json:"server_state"`
 }
 
-// ServerState contains server state information including free disk space
+// ServerState contains server state information including free disk space.
+// Uses pointer types to distinguish between "field not present" (nil) and "field is zero value".
 type ServerState struct {
-	ConnectionStatus string `json:"connection_status"`
-	DHTNodes         int64  `json:"dht_nodes"`
-	DlInfoSpeed      int64  `json:"dl_info_speed"`
-	UpInfoSpeed      int64  `json:"up_info_speed"`
-	DlInfoData       int64  `json:"dl_info_data"`
-	UpInfoData       int64  `json:"up_info_data"`
-	FreeSpaceOnDisk  int64  `json:"free_space_on_disk"`
+	ConnectionStatus *string `json:"connection_status"`
+	DHTNodes         *int64  `json:"dht_nodes"`
+	DlInfoSpeed      *int64  `json:"dl_info_speed"`
+	UpInfoSpeed      *int64  `json:"up_info_speed"`
+	DlInfoData       *int64  `json:"dl_info_data"`
+	UpInfoData       *int64  `json:"up_info_data"`
+	FreeSpaceOnDisk  *int64  `json:"free_space_on_disk"`
 }
 
 // SyncMainDataResponse represents the full response from /api/v2/sync/maindata

@@ -450,13 +450,13 @@ func (m *MockClient) GetDirectoryContent(ctx context.Context, path string, mode 
 // toServerState converts GlobalStats to ServerState for sync API responses
 func (g *GlobalStats) toServerState() ServerState {
 	return ServerState{
-		ConnectionStatus: g.ConnectionStatus,
-		DHTNodes:         g.DHTNodes,
-		DlInfoSpeed:      g.DlInfoSpeed,
-		UpInfoSpeed:      g.UpInfoSpeed,
-		DlInfoData:       g.DlInfoData,
-		UpInfoData:       g.UpInfoData,
-		FreeSpaceOnDisk:  g.FreeSpaceOnDisk,
+		ConnectionStatus: &g.ConnectionStatus,
+		DHTNodes:         &g.DHTNodes,
+		DlInfoSpeed:      &g.DlInfoSpeed,
+		UpInfoSpeed:      &g.UpInfoSpeed,
+		DlInfoData:       &g.DlInfoData,
+		UpInfoData:       &g.UpInfoData,
+		FreeSpaceOnDisk:  &g.FreeSpaceOnDisk,
 	}
 }
 
