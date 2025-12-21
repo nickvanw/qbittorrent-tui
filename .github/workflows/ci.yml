@@ -135,7 +135,7 @@ jobs:
         fi
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: qbt-tui-${{ matrix.goos }}-${{ matrix.goarch }}
         path: dist/
