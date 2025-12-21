@@ -17,6 +17,7 @@ import (
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
 	"github.com/nickvanw/qbittorrent-tui/internal/filter"
+	"github.com/nickvanw/qbittorrent-tui/internal/logger"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/components"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/terminal"
@@ -106,8 +107,7 @@ const (
 
 // Message types
 type (
-	torrentDataMsg      []api.Torrent
-	statsDataMsg        *api.GlobalStats
+	syncDataMsg         *api.SyncMainDataResponse
 	categoriesDataMsg   map[string]interface{}
 	tagsDataMsg         []string
 	errorMsg            error
@@ -138,7 +138,9 @@ type MainView struct {
 
 	// State
 	torrents        []api.Torrent
-	allTorrents     []api.Torrent // unfiltered torrents
+	allTorrents     []api.Torrent          // unfiltered torrents
+	torrentMap      map[string]api.Torrent // hash -> torrent for sync API
+	currentRID      int                    // Current RID for sync API incremental updates
 	stats           *api.GlobalStats
 	categories      map[string]interface{}
 	tags            []string
@@ -292,6 +294,8 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 		keys:           DefaultKeyMap(),
 		viewMode:       ViewModeMain,
 		addDialog:      NewAddTorrentDialog(cwd),
+		torrentMap:     make(map[string]api.Torrent), // Initialize torrent map for sync API
+		currentRID:     0,                            // Start with RID 0 for first full update
 	}
 }
 
@@ -314,34 +318,25 @@ func (m *MainView) fetchAllData() tea.Cmd {
 	}
 
 	return tea.Batch(
-		m.fetchTorrents(),
-		m.fetchStats(),
+		m.fetchTorrents(), // Gets torrents + stats via sync API
 		m.fetchCategories(),
 		m.fetchTags(),
 	)
 }
 
-// fetchTorrents fetches torrent data
+// fetchTorrents fetches torrent data using the sync API for incremental updates
 func (m *MainView) fetchTorrents() tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		ctx := context.Background()
-		torrents, err := m.apiClient.GetTorrents(ctx)
-		if err != nil {
-			return errorMsg(err)
-		}
-		return torrentDataMsg(torrents)
-	})
-}
 
-// fetchStats fetches global statistics
-func (m *MainView) fetchStats() tea.Cmd {
-	return tea.Cmd(func() tea.Msg {
-		ctx := context.Background()
-		stats, err := m.apiClient.GetGlobalStats(ctx)
+		// Log the RID we're sending
+		logger.Debug("Requesting sync data", "rid", m.currentRID)
+
+		syncData, err := m.apiClient.SyncMainData(ctx, m.currentRID)
 		if err != nil {
 			return errorMsg(err)
 		}
-		return statsDataMsg(stats)
+		return syncDataMsg(syncData)
 	})
 }
 
@@ -417,42 +412,155 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.updateDimensions()
 
-	case torrentDataMsg:
-		m.allTorrents = []api.Torrent(msg)
+	case syncDataMsg:
+		// Handle incremental updates from sync API
+		syncData := msg
+
+		// Log sync update if debug logging is enabled
+		logger.LogSyncUpdate(syncData)
+
+		// Update RID for next request
+		m.currentRID = syncData.RID
+
+		// Handle full update (first request or after disconnection)
+		if syncData.FullUpdate {
+			// Clear existing data and replace with new data
+			m.torrentMap = make(map[string]api.Torrent)
+			m.categories = make(map[string]interface{})
+			m.tags = nil
+			for hash, partial := range syncData.Torrents {
+				torrent := partial.ToTorrent()
+				torrent.Hash = hash // Ensure hash is set
+				m.torrentMap[hash] = torrent
+			}
+		} else {
+			// Incremental update - apply only changed fields using pointer-based detection
+			for hash, partial := range syncData.Torrents {
+				if existing, exists := m.torrentMap[hash]; exists {
+					// Merge partial data into existing torrent (only non-nil fields are updated)
+					partial.ApplyTo(&existing)
+					existing.Hash = hash // Ensure hash is set
+					m.torrentMap[hash] = existing
+				} else {
+					// New torrent - convert partial to full torrent
+					torrent := partial.ToTorrent()
+					torrent.Hash = hash
+					m.torrentMap[hash] = torrent
+				}
+			}
+			// Remove deleted torrents
+			for _, hash := range syncData.TorrentsRemoved {
+				delete(m.torrentMap, hash)
+			}
+		}
+
+		// Convert map to slice for display (deterministic order by sorted hash)
+		m.allTorrents = make([]api.Torrent, 0, len(m.torrentMap))
+		hashes := make([]string, 0, len(m.torrentMap))
+		for hash := range m.torrentMap {
+			hashes = append(hashes, hash)
+		}
+		sort.Strings(hashes)
+		for _, hash := range hashes {
+			m.allTorrents = append(m.allTorrents, m.torrentMap[hash])
+		}
+
+		// Apply filtering
 		m.applyFilter()
 		m.isLoading = false
 		m.lastRefreshTime = time.Now()
-		// Don't auto-clear errors here - let timer handle it
+
+		// Update categories if provided (incremental: add/update new, remove deleted)
+		if syncData.Categories != nil && len(syncData.Categories) > 0 {
+			if m.categories == nil {
+				m.categories = make(map[string]interface{})
+			}
+			// Add or update categories
+			for name, cat := range syncData.Categories {
+				m.categories[name] = map[string]interface{}{
+					"name":          cat.Name,
+					"savePath":      cat.SavePath,
+					"download_path": cat.DownloadPath,
+				}
+			}
+		}
+		// Remove deleted categories
+		for _, name := range syncData.CategoriesRemoved {
+			delete(m.categories, name)
+		}
+
+		// Update tags (incremental: add new, remove deleted)
+		if len(syncData.Tags) > 0 {
+			// Use a set for O(1) duplicate detection
+			tagSet := make(map[string]struct{}, len(m.tags))
+			for _, tag := range m.tags {
+				tagSet[tag] = struct{}{}
+			}
+			for _, newTag := range syncData.Tags {
+				if _, exists := tagSet[newTag]; !exists {
+					m.tags = append(m.tags, newTag)
+				}
+			}
+			sort.Strings(m.tags)
+		}
+		// Remove deleted tags using a set for O(n) removal
+		if len(syncData.TagsRemoved) > 0 {
+			removeSet := make(map[string]struct{}, len(syncData.TagsRemoved))
+			for _, tag := range syncData.TagsRemoved {
+				removeSet[tag] = struct{}{}
+			}
+			filtered := m.tags[:0]
+			for _, tag := range m.tags {
+				if _, remove := removeSet[tag]; !remove {
+					filtered = append(filtered, tag)
+				}
+			}
+			m.tags = filtered
+		}
+
+		// Update stats from server state
+		if m.stats == nil {
+			m.stats = &api.GlobalStats{}
+		}
+		// Only update fields if they're present (non-nil) in ServerState
+		if syncData.ServerState.ConnectionStatus != nil {
+			m.stats.ConnectionStatus = *syncData.ServerState.ConnectionStatus
+		}
+		if syncData.ServerState.DHTNodes != nil {
+			m.stats.DHTNodes = *syncData.ServerState.DHTNodes
+		}
+		if syncData.ServerState.DlInfoSpeed != nil {
+			m.stats.DlInfoSpeed = *syncData.ServerState.DlInfoSpeed
+		}
+		if syncData.ServerState.UpInfoSpeed != nil {
+			m.stats.UpInfoSpeed = *syncData.ServerState.UpInfoSpeed
+		}
+		if syncData.ServerState.DlInfoData != nil {
+			m.stats.DlInfoData = *syncData.ServerState.DlInfoData
+		}
+		if syncData.ServerState.UpInfoData != nil {
+			m.stats.UpInfoData = *syncData.ServerState.UpInfoData
+		}
+		if syncData.ServerState.FreeSpaceOnDisk != nil {
+			m.stats.FreeSpaceOnDisk = *syncData.ServerState.FreeSpaceOnDisk
+		}
+
+		// Update stats panel with latest stats
+		m.statsPanel.SetStats(m.stats)
 
 		// Update torrent details if currently viewing a torrent
 		if m.viewMode == ViewModeDetails && m.detailsViewHash != "" {
-			// Search in ALL torrents (not just filtered ones)
-			torrentFound := false
-			for _, torrent := range m.allTorrents {
-				if torrent.Hash == m.detailsViewHash {
-					m.torrentDetails.UpdateTorrent(&torrent)
-					torrentFound = true
-					break
-				}
-			}
-
-			// If torrent no longer exists (deleted), exit details mode
-			if !torrentFound {
+			// Check if torrent still exists in map
+			if torrent, found := m.torrentMap[m.detailsViewHash]; found {
+				m.torrentDetails.UpdateTorrent(&torrent)
+			} else {
+				// Torrent was deleted, exit details mode
 				m.viewMode = ViewModeMain
 				m.detailsViewHash = ""
 			}
 		}
 
 		// Update terminal title after torrent data received
-		cmds = append(cmds, m.updateTerminalTitle())
-
-	case statsDataMsg:
-		m.stats = (*api.GlobalStats)(msg)
-		m.statsPanel.SetStats(m.stats)
-		m.isLoading = false
-		m.lastRefreshTime = time.Now()
-
-		// Update terminal title after stats received
 		cmds = append(cmds, m.updateTerminalTitle())
 
 	case categoriesDataMsg:

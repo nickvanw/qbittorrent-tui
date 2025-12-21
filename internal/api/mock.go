@@ -19,6 +19,7 @@ type MockClient struct {
 	LoginError        error
 	GetError          error
 	LoggedIn          bool
+	currentRID        int // Track current RID for sync API
 }
 
 // NewMockClient creates a new mock client with default test data
@@ -61,6 +62,99 @@ func (m *MockClient) GetTorrents(ctx context.Context) ([]Torrent, error) {
 
 func (m *MockClient) GetTorrentsFiltered(ctx context.Context, filter map[string]string) ([]Torrent, error) {
 	return m.GetTorrents(ctx)
+}
+
+func (m *MockClient) SyncMainData(ctx context.Context, rid int) (*SyncMainDataResponse, error) {
+	if m.GetError != nil {
+		return nil, m.GetError
+	}
+	if !m.LoggedIn {
+		return nil, fmt.Errorf("authentication required")
+	}
+
+	// Increment RID for next request
+	m.currentRID++
+
+	isFullUpdate := rid == 0
+
+	// Convert categories to Category type
+	categoriesMap := make(map[string]Category)
+	for name := range m.Categories {
+		categoriesMap[name] = Category{
+			Name:     name,
+			SavePath: "/downloads/" + name,
+		}
+	}
+
+	if isFullUpdate {
+		// Full update - return all torrents with complete data as PartialTorrent
+		torrentsMap := make(map[string]PartialTorrent)
+		for _, t := range m.Torrents {
+			torrentsMap[t.Hash] = torrentToPartial(t)
+		}
+
+		return &SyncMainDataResponse{
+			RID:             m.currentRID,
+			FullUpdate:      true,
+			Torrents:        torrentsMap,
+			TorrentsRemoved: []string{},
+			Categories:      categoriesMap,
+			Tags:            m.Tags,
+			ServerState:     m.GlobalStats.toServerState(),
+		}, nil
+	}
+
+	// Incremental update - simulate real qBittorrent behavior:
+	// - Only changed torrents are included
+	// - In real API, changed fields might be partial (only changed fields sent)
+	// - For mock, we return empty map (no changes) to test the no-change case
+	// - Tests can modify mock state to simulate actual changes
+	return &SyncMainDataResponse{
+		RID:               m.currentRID,
+		FullUpdate:        false,
+		Torrents:          make(map[string]PartialTorrent), // No changes by default
+		TorrentsRemoved:   []string{},
+		Categories:        make(map[string]Category), // No new categories
+		CategoriesRemoved: []string{},
+		Tags:              []string{}, // No new tags
+		TagsRemoved:       []string{},
+		ServerState:       m.GlobalStats.toServerState(),
+	}, nil
+}
+
+// torrentToPartial converts a full Torrent to a PartialTorrent with all fields set
+func torrentToPartial(t Torrent) PartialTorrent {
+	return PartialTorrent{
+		Hash:             &t.Hash,
+		Name:             &t.Name,
+		Size:             &t.Size,
+		Progress:         &t.Progress,
+		DlSpeed:          &t.DlSpeed,
+		UpSpeed:          &t.UpSpeed,
+		Priority:         &t.Priority,
+		NumSeeds:         &t.NumSeeds,
+		NumLeeches:       &t.NumLeeches,
+		NumComplete:      &t.NumComplete,
+		NumIncomplete:    &t.NumIncomplete,
+		Ratio:            &t.Ratio,
+		ETA:              &t.ETA,
+		State:            &t.State,
+		Category:         &t.Category,
+		Tags:             &t.Tags,
+		AddedOn:          &t.AddedOn,
+		CompletedOn:      &t.CompletedOn,
+		Tracker:          &t.Tracker,
+		SavePath:         &t.SavePath,
+		Downloaded:       &t.Downloaded,
+		Uploaded:         &t.Uploaded,
+		RemainingSize:    &t.RemainingSize,
+		TimeActive:       &t.TimeActive,
+		AutoTMM:          &t.AutoTMM,
+		TotalSize:        &t.TotalSize,
+		MaxRatio:         &t.MaxRatio,
+		MaxSeedingTime:   &t.MaxSeedingTime,
+		SeedingTimeLimit: &t.SeedingTimeLimit,
+	}
 }
 
 func (m *MockClient) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
@@ -350,6 +444,19 @@ func (m *MockClient) GetDirectoryContent(ctx context.Context, path string, mode 
 		return []string{"/media/movies", "/media/tv", "/media/music"}, nil
 	default:
 		return []string{}, nil
+	}
+}
+
+// toServerState converts GlobalStats to ServerState for sync API responses
+func (g *GlobalStats) toServerState() ServerState {
+	return ServerState{
+		ConnectionStatus: &g.ConnectionStatus,
+		DHTNodes:         &g.DHTNodes,
+		DlInfoSpeed:      &g.DlInfoSpeed,
+		UpInfoSpeed:      &g.UpInfoSpeed,
+		DlInfoData:       &g.DlInfoData,
+		UpInfoData:       &g.UpInfoData,
+		FreeSpaceOnDisk:  &g.FreeSpaceOnDisk,
 	}
 }
 

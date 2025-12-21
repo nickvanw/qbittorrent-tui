@@ -1,0 +1,248 @@
+package logger
+
+import (
+	"fmt"
+	"reflect"
+	"strings"
+
+	"github.com/nickvanw/qbittorrent-tui/internal/api"
+)
+
+// LogSyncUpdate logs a sync API update with details
+func LogSyncUpdate(syncData *api.SyncMainDataResponse) {
+	if !isEnabled {
+		return
+	}
+
+	// Summary line for the sync update
+	Info("Sync update",
+		"rid", syncData.RID,
+		"full_update", syncData.FullUpdate,
+		"torrents_updated", len(syncData.Torrents),
+		"torrents_removed", len(syncData.TorrentsRemoved),
+		"categories_updated", len(syncData.Categories),
+		"categories_removed", len(syncData.CategoriesRemoved),
+		"tags_added", len(syncData.Tags),
+		"tags_removed", len(syncData.TagsRemoved),
+	)
+
+	// Detailed logging - one line per torrent with updated fields
+	logTorrentDetails(syncData)
+	logCategoryDetails(syncData)
+	logTagDetails(syncData)
+}
+
+// logTorrentDetails logs one line per changed torrent with all updated field values
+func logTorrentDetails(syncData *api.SyncMainDataResponse) {
+	// One line per updated torrent with all field values (using reflection)
+	for hash, partial := range syncData.Torrents {
+		attrs := []any{"hash", truncateHash(hash)}
+		attrs = append(attrs, formatPartialTorrent(&partial)...)
+		Debug("Torrent updated", attrs...)
+	}
+
+	// One line for removed torrents
+	if len(syncData.TorrentsRemoved) > 0 {
+		Debug("Torrents removed",
+			"count", len(syncData.TorrentsRemoved),
+			"hashes", formatHashList(syncData.TorrentsRemoved),
+		)
+	}
+}
+
+// logCategoryDetails logs category changes (one line per category)
+func logCategoryDetails(syncData *api.SyncMainDataResponse) {
+	// One line per category change
+	for name, cat := range syncData.Categories {
+		Debug("Category updated",
+			"name", name,
+			"save_path", cat.SavePath,
+			"download_path", cat.DownloadPath,
+		)
+	}
+
+	// One line per removed category
+	for _, name := range syncData.CategoriesRemoved {
+		Debug("Category removed", "name", name)
+	}
+}
+
+// logTagDetails logs tag changes (one line per tag)
+func logTagDetails(syncData *api.SyncMainDataResponse) {
+	// One line per added tag
+	for _, tag := range syncData.Tags {
+		Debug("Tag added", "tag", tag)
+	}
+
+	// One line per removed tag
+	for _, tag := range syncData.TagsRemoved {
+		Debug("Tag removed", "tag", tag)
+	}
+}
+
+// truncateHash truncates a hash to first 8 characters for readability
+func truncateHash(hash string) string {
+	if len(hash) > 8 {
+		return hash[:8] + "..."
+	}
+	return hash
+}
+
+// formatBytes formats bytes to a human-readable string
+func formatBytes(bytes int64) string {
+	if bytes == 0 {
+		return "0 B"
+	}
+
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+		TB = 1024 * GB
+	)
+
+	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.2f TB", float64(bytes)/TB)
+	case bytes >= GB:
+		return fmt.Sprintf("%.2f GB", float64(bytes)/GB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.2f MB", float64(bytes)/MB)
+	case bytes >= KB:
+		return fmt.Sprintf("%.2f KB", float64(bytes)/KB)
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+// formatETA formats ETA in seconds to a human-readable string
+func formatETA(seconds int64) string {
+	if seconds < 0 {
+		return "∞"
+	}
+	if seconds == 0 {
+		return "0s"
+	}
+
+	const (
+		minute = 60
+		hour   = 60 * minute
+		day    = 24 * hour
+	)
+
+	switch {
+	case seconds >= day:
+		return fmt.Sprintf("%dd %dh", seconds/day, (seconds%day)/hour)
+	case seconds >= hour:
+		return fmt.Sprintf("%dh %dm", seconds/hour, (seconds%hour)/minute)
+	case seconds >= minute:
+		return fmt.Sprintf("%dm %ds", seconds/minute, seconds%minute)
+	default:
+		return fmt.Sprintf("%ds", seconds)
+	}
+}
+
+// formatSpeed formats a speed in bytes/sec to a human-readable string
+func formatSpeed(bytesPerSec int64) string {
+	if bytesPerSec == 0 {
+		return "0 B/s"
+	}
+
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+	)
+
+	switch {
+	case bytesPerSec >= GB:
+		return fmt.Sprintf("%.2f GB/s", float64(bytesPerSec)/GB)
+	case bytesPerSec >= MB:
+		return fmt.Sprintf("%.2f MB/s", float64(bytesPerSec)/MB)
+	case bytesPerSec >= KB:
+		return fmt.Sprintf("%.2f KB/s", float64(bytesPerSec)/KB)
+	default:
+		return fmt.Sprintf("%d B/s", bytesPerSec)
+	}
+}
+
+// formatHashList formats a list of hashes for logging (truncates long lists)
+func formatHashList(hashes []string) string {
+	if len(hashes) == 0 {
+		return "[]"
+	}
+	if len(hashes) <= 3 {
+		// Show all hashes (truncated)
+		truncated := make([]string, len(hashes))
+		for i, h := range hashes {
+			if len(h) > 8 {
+				truncated[i] = h[:8] + "..."
+			} else {
+				truncated[i] = h
+			}
+		}
+		return "[" + strings.Join(truncated, ", ") + "]"
+	}
+	// Show first 3 and count
+	truncated := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		if len(hashes[i]) > 8 {
+			truncated[i] = hashes[i][:8] + "..."
+		} else {
+			truncated[i] = hashes[i]
+		}
+	}
+	return fmt.Sprintf("[%s, ... (%d more)]", strings.Join(truncated, ", "), len(hashes)-3)
+}
+
+// formatValue formats a field value based on its name for human-readable logging
+func formatValue(fieldName string, value any) any {
+	switch fieldName {
+	case "dlspeed", "upspeed":
+		if v, ok := value.(int64); ok {
+			return formatSpeed(v)
+		}
+	case "size", "downloaded", "uploaded", "amount_left", "total_size":
+		if v, ok := value.(int64); ok {
+			return formatBytes(v)
+		}
+	case "progress":
+		if v, ok := value.(float64); ok {
+			return fmt.Sprintf("%.2f%%", v*100)
+		}
+	case "eta":
+		if v, ok := value.(int64); ok {
+			return formatETA(v)
+		}
+	case "ratio", "max_ratio":
+		if v, ok := value.(float64); ok {
+			return fmt.Sprintf("%.2f", v)
+		}
+	case "hash":
+		if v, ok := value.(string); ok {
+			return truncateHash(v)
+		}
+	}
+	return value
+}
+
+// formatPartialTorrent uses reflection to extract all non-nil fields from a PartialTorrent
+func formatPartialTorrent(partial *api.PartialTorrent) []any {
+	attrs := []any{}
+	v := reflect.ValueOf(partial).Elem()
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Kind() == reflect.Ptr && !field.IsNil() {
+			// Get JSON tag for field name, fall back to lowercase field name
+			fieldName := t.Field(i).Tag.Get("json")
+			if fieldName == "" {
+				fieldName = strings.ToLower(t.Field(i).Name)
+			}
+			value := field.Elem().Interface()
+			attrs = append(attrs, fieldName, formatValue(fieldName, value))
+		}
+	}
+	return attrs
+}

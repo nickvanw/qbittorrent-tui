@@ -110,6 +110,20 @@ func (c *Client) GetTorrentsFiltered(ctx context.Context, filter map[string]stri
 	return torrents, nil
 }
 
+// SyncMainData fetches incremental updates from the qBittorrent sync API
+// Pass rid=0 for the first request to get all data, then use the returned rid
+// for subsequent requests to get only changes since the last request
+func (c *Client) SyncMainData(ctx context.Context, rid int) (*SyncMainDataResponse, error) {
+	endpoint := fmt.Sprintf("/api/v2/sync/maindata?rid=%d", rid)
+
+	var response SyncMainDataResponse
+	if err := c.get(ctx, endpoint, &response); err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
 	// Get transfer info
 	var stats GlobalStats
@@ -117,16 +131,9 @@ func (c *Client) GetGlobalStats(ctx context.Context) (*GlobalStats, error) {
 		return nil, err
 	}
 
-	// Get maindata for free disk space
-	var mainData MainData
-	if err := c.get(ctx, "/api/v2/sync/maindata", &mainData); err != nil {
-		// Log warning but don't fail - free space is not critical
-		// In a real app you'd use a proper logger here
-		// For now, just continue with stats.FreeSpaceOnDisk = 0
-	} else {
-		// Merge free space from maindata
-		stats.FreeSpaceOnDisk = mainData.ServerState.FreeSpaceOnDisk
-	}
+	// Note: FreeSpaceOnDisk is now obtained from SyncMainData().ServerState
+	// to avoid interfering with the RID tracking for incremental updates.
+	// The main view will merge this from the sync data.
 
 	return &stats, nil
 }

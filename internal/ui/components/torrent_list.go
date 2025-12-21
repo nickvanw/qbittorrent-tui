@@ -64,11 +64,12 @@ var allColumns = []ColumnConfig{
 	{Key: "seeds", Title: "Seeds", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 4},       // "Seeds ↑" = 7 chars
 	{Key: "peers", Title: "Peers", MinWidth: 7, MaxWidth: 12, FlexGrow: 0.05, Priority: 5},       // "Peers ↑" = 7 chars
 	{Key: "ratio", Title: "Ratio", MinWidth: 7, MaxWidth: 10, FlexGrow: 0.0, Priority: 5},        // "Ratio ↑" = 7 chars
-	{Key: "eta", Title: "ETA", MinWidth: 5, MaxWidth: 15, FlexGrow: 0.05, Priority: 6},           // "ETA ↑" = 5 chars
-	{Key: "added_on", Title: "Added", MinWidth: 7, MaxWidth: 20, FlexGrow: 0.05, Priority: 7},    // "Added ↑" = 7 chars
-	{Key: "category", Title: "Category", MinWidth: 10, MaxWidth: 20, FlexGrow: 0.1, Priority: 8}, // "Category ↑" = 10 chars
-	{Key: "tags", Title: "Tags", MinWidth: 6, MaxWidth: 25, FlexGrow: 0.1, Priority: 9},          // "Tags ↑" = 6 chars
-	{Key: "tracker", Title: "Tracker", MinWidth: 9, MaxWidth: 25, FlexGrow: 0.1, Priority: 10},   // "Tracker ↑" = 9 chars
+	{Key: "uploaded", Title: "Uploaded", MinWidth: 10, MaxWidth: 15, FlexGrow: 0.0, Priority: 6}, // "Uploaded ↑" = 10 chars
+	{Key: "eta", Title: "ETA", MinWidth: 5, MaxWidth: 15, FlexGrow: 0.05, Priority: 7},           // "ETA ↑" = 5 chars
+	{Key: "added_on", Title: "Added", MinWidth: 7, MaxWidth: 20, FlexGrow: 0.05, Priority: 8},    // "Added ↑" = 7 chars
+	{Key: "category", Title: "Category", MinWidth: 10, MaxWidth: 20, FlexGrow: 0.1, Priority: 9}, // "Category ↑" = 10 chars
+	{Key: "tags", Title: "Tags", MinWidth: 6, MaxWidth: 25, FlexGrow: 0.1, Priority: 10},         // "Tags ↑" = 6 chars
+	{Key: "tracker", Title: "Tracker", MinWidth: 9, MaxWidth: 25, FlexGrow: 0.1, Priority: 11},   // "Tracker ↑" = 9 chars
 }
 
 // Default visible columns
@@ -375,6 +376,9 @@ func (t *TorrentList) renderTorrent(index int) string {
 			style = lipgloss.NewStyle()
 		case "ratio":
 			content = fmt.Sprintf("%.2f", torrent.Ratio)
+			style = lipgloss.NewStyle()
+		case "uploaded":
+			content = styles.FormatBytes(torrent.Uploaded)
 			style = lipgloss.NewStyle()
 		case "eta":
 			content = styles.FormatDuration(torrent.ETA)
@@ -686,6 +690,13 @@ func (t *TorrentList) compareByColumn(a, b api.Torrent, column string) int {
 		if a.Ratio < b.Ratio {
 			return -1
 		} else if a.Ratio > b.Ratio {
+			return 1
+		}
+		return 0
+	case "uploaded":
+		if a.Uploaded < b.Uploaded {
+			return -1
+		} else if a.Uploaded > b.Uploaded {
 			return 1
 		}
 		return 0
