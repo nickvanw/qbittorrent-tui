@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
@@ -33,57 +34,10 @@ func LogSyncUpdate(syncData *api.SyncMainDataResponse) {
 
 // logTorrentDetails logs one line per changed torrent with all updated field values
 func logTorrentDetails(syncData *api.SyncMainDataResponse) {
-	// One line per updated torrent with all field values
+	// One line per updated torrent with all field values (using reflection)
 	for hash, partial := range syncData.Torrents {
-		// Build attributes dynamically based on which fields are present
-		attrs := []any{
-			"hash", truncateHash(hash),
-		}
-
-		// Add all non-nil fields as structured attributes
-		if partial.Name != nil {
-			attrs = append(attrs, "name", *partial.Name)
-		}
-		if partial.State != nil {
-			attrs = append(attrs, "state", *partial.State)
-		}
-		if partial.Progress != nil {
-			attrs = append(attrs, "progress", fmt.Sprintf("%.2f%%", *partial.Progress*100))
-		}
-		if partial.DlSpeed != nil {
-			attrs = append(attrs, "dlspeed", formatSpeed(*partial.DlSpeed))
-		}
-		if partial.UpSpeed != nil {
-			attrs = append(attrs, "upspeed", formatSpeed(*partial.UpSpeed))
-		}
-		if partial.Size != nil {
-			attrs = append(attrs, "size", formatBytes(*partial.Size))
-		}
-		if partial.Downloaded != nil {
-			attrs = append(attrs, "downloaded", formatBytes(*partial.Downloaded))
-		}
-		if partial.Uploaded != nil {
-			attrs = append(attrs, "uploaded", formatBytes(*partial.Uploaded))
-		}
-		if partial.Ratio != nil {
-			attrs = append(attrs, "ratio", fmt.Sprintf("%.2f", *partial.Ratio))
-		}
-		if partial.ETA != nil {
-			attrs = append(attrs, "eta", formatETA(*partial.ETA))
-		}
-		if partial.Category != nil {
-			attrs = append(attrs, "category", *partial.Category)
-		}
-		if partial.Tags != nil {
-			attrs = append(attrs, "tags", *partial.Tags)
-		}
-		if partial.NumSeeds != nil {
-			attrs = append(attrs, "seeds", *partial.NumSeeds)
-		}
-		if partial.NumLeeches != nil {
-			attrs = append(attrs, "leeches", *partial.NumLeeches)
-		}
-
+		attrs := []any{"hash", truncateHash(hash)}
+		attrs = append(attrs, formatPartialTorrent(&partial)...)
 		Debug("Torrent updated", attrs...)
 	}
 
@@ -239,4 +193,56 @@ func formatHashList(hashes []string) string {
 		}
 	}
 	return fmt.Sprintf("[%s, ... (%d more)]", strings.Join(truncated, ", "), len(hashes)-3)
+}
+
+// formatValue formats a field value based on its name for human-readable logging
+func formatValue(fieldName string, value any) any {
+	switch fieldName {
+	case "dlspeed", "upspeed":
+		if v, ok := value.(int64); ok {
+			return formatSpeed(v)
+		}
+	case "size", "downloaded", "uploaded", "amount_left", "total_size":
+		if v, ok := value.(int64); ok {
+			return formatBytes(v)
+		}
+	case "progress":
+		if v, ok := value.(float64); ok {
+			return fmt.Sprintf("%.2f%%", v*100)
+		}
+	case "eta":
+		if v, ok := value.(int64); ok {
+			return formatETA(v)
+		}
+	case "ratio", "max_ratio":
+		if v, ok := value.(float64); ok {
+			return fmt.Sprintf("%.2f", v)
+		}
+	case "hash":
+		if v, ok := value.(string); ok {
+			return truncateHash(v)
+		}
+	}
+	return value
+}
+
+// formatPartialTorrent uses reflection to extract all non-nil fields from a PartialTorrent
+func formatPartialTorrent(partial *api.PartialTorrent) []any {
+	attrs := []any{}
+	v := reflect.ValueOf(partial).Elem()
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		if field.Kind() == reflect.Ptr && !field.IsNil() {
+			// Get JSON tag for field name, fall back to lowercase field name
+			fieldName := t.Field(i).Tag.Get("json")
+			if fieldName == "" {
+				fieldName = strings.ToLower(t.Field(i).Name)
+			}
+			value := field.Elem().Interface()
+			attrs = append(attrs, fieldName, formatValue(fieldName, value))
+		}
+	}
+	return attrs
 }
