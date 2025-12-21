@@ -12,6 +12,7 @@ import (
 var (
 	defaultLogger *slog.Logger
 	isEnabled     bool
+	logFileHandle *os.File
 )
 
 // Setup initializes the global logger with the given configuration.
@@ -42,13 +43,14 @@ func Setup(enabled bool, logFile string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file %s: %w", logFile, err)
 	}
+	logFileHandle = f
 
 	// Configure slog handler
 	opts := &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}
 
-	handler := slog.NewTextHandler(f, opts)
+	handler := slog.NewTextHandler(logFileHandle, opts)
 	defaultLogger = slog.New(handler)
 
 	// Log startup message
@@ -88,4 +90,13 @@ func Error(msg string, args ...any) {
 // IsEnabled returns whether debug logging is enabled
 func IsEnabled() bool {
 	return isEnabled
+}
+
+// Close closes the log file handle if it's open.
+// This should be called when the application exits.
+func Close() error {
+	if logFileHandle != nil {
+		return logFileHandle.Close()
+	}
+	return nil
 }

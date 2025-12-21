@@ -452,10 +452,15 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Convert map to slice for display
+		// Convert map to slice for display (deterministic order by sorted hash)
 		m.allTorrents = make([]api.Torrent, 0, len(m.torrentMap))
-		for _, torrent := range m.torrentMap {
-			m.allTorrents = append(m.allTorrents, torrent)
+		hashes := make([]string, 0, len(m.torrentMap))
+		for hash := range m.torrentMap {
+			hashes = append(hashes, hash)
+		}
+		sort.Strings(hashes)
+		for _, hash := range hashes {
+			m.allTorrents = append(m.allTorrents, m.torrentMap[hash])
 		}
 
 		// Apply filtering
@@ -484,30 +489,31 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update tags (incremental: add new, remove deleted)
 		if len(syncData.Tags) > 0 {
-			// In incremental updates, Tags contains only newly added tags
-			// Append them to existing tags (avoiding duplicates)
+			// Use a set for O(1) duplicate detection
+			tagSet := make(map[string]struct{}, len(m.tags))
+			for _, tag := range m.tags {
+				tagSet[tag] = struct{}{}
+			}
 			for _, newTag := range syncData.Tags {
-				found := false
-				for _, existingTag := range m.tags {
-					if existingTag == newTag {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if _, exists := tagSet[newTag]; !exists {
 					m.tags = append(m.tags, newTag)
 				}
 			}
 			sort.Strings(m.tags)
 		}
-		// Remove deleted tags
-		for _, removedTag := range syncData.TagsRemoved {
-			for i, tag := range m.tags {
-				if tag == removedTag {
-					m.tags = append(m.tags[:i], m.tags[i+1:]...)
-					break
+		// Remove deleted tags using a set for O(n) removal
+		if len(syncData.TagsRemoved) > 0 {
+			removeSet := make(map[string]struct{}, len(syncData.TagsRemoved))
+			for _, tag := range syncData.TagsRemoved {
+				removeSet[tag] = struct{}{}
+			}
+			filtered := m.tags[:0]
+			for _, tag := range m.tags {
+				if _, remove := removeSet[tag]; !remove {
+					filtered = append(filtered, tag)
 				}
 			}
+			m.tags = filtered
 		}
 
 		// Update stats from server state

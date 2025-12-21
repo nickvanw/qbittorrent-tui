@@ -136,6 +136,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if err := logger.Setup(cfg.Debug.Enabled, cfg.Debug.LogFile); err != nil {
 		return fmt.Errorf("failed to setup logger: %w", err)
 	}
+	defer logger.Close()
 
 	// Create and connect API client
 	client, err := api.NewClient(cfg.Server.URL)
