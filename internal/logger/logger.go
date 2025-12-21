@@ -30,7 +30,11 @@ func Setup(enabled bool, logFile string) error {
 	// Determine log file path
 	if logFile == "" {
 		// Auto-generate path: ~/.local/state/qbt-tui/debug-YYYYMMDD-HHMMSS.log
-		stateDir := filepath.Join(os.Getenv("HOME"), ".local", "state", "qbt-tui")
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to determine user home directory: %w", err)
+		}
+		stateDir := filepath.Join(homeDir, ".local", "state", "qbt-tui")
 		if err := os.MkdirAll(stateDir, 0755); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)
 		}
