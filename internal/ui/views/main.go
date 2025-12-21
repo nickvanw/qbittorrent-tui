@@ -426,6 +426,8 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if syncData.FullUpdate {
 			// Clear existing data and replace with new data
 			m.torrentMap = make(map[string]api.Torrent)
+			m.categories = make(map[string]interface{})
+			m.tags = nil
 			for hash, partial := range syncData.Torrents {
 				torrent := partial.ToTorrent()
 				torrent.Hash = hash // Ensure hash is set
