@@ -108,7 +108,6 @@ const (
 // Message types
 type (
 	syncDataMsg         *api.SyncMainDataResponse
-	statsDataMsg        *api.GlobalStats
 	categoriesDataMsg   map[string]interface{}
 	tagsDataMsg         []string
 	errorMsg            error
@@ -340,7 +339,6 @@ func (m *MainView) fetchTorrents() tea.Cmd {
 		return syncDataMsg(syncData)
 	})
 }
-
 
 // fetchCategories fetches categories
 func (m *MainView) fetchCategories() tea.Cmd {

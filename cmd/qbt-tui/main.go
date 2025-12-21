@@ -20,8 +20,8 @@ var (
 	username   string
 	password   string
 	refreshInt int
-	debugMode bool
-	logFile   string
+	debugMode  bool
+	logFile    string
 )
 
 func main() {
