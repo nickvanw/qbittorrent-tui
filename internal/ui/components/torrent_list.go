@@ -153,8 +153,27 @@ func NewTorrentListWithColumns(columns []string, defaultSortColumn string, defau
 
 // SetTorrents updates the torrent list and applies sorting
 func (t *TorrentList) SetTorrents(torrents []api.Torrent) {
+	prevSelected := t.selectedHash
 	t.torrents = torrents
 	t.applySorting()
+
+	if len(t.torrents) == 0 {
+		t.cursor = 0
+		t.offset = 0
+		t.selectedHash = ""
+		return
+	}
+
+	if prevSelected != "" {
+		for i, torrent := range t.torrents {
+			if torrent.Hash == prevSelected {
+				t.cursor = i
+				t.selectedHash = prevSelected
+				return
+			}
+		}
+	}
+
 	// Keep cursor in bounds
 	if t.cursor >= len(t.torrents) {
 		t.cursor = len(t.torrents) - 1
@@ -163,9 +182,7 @@ func (t *TorrentList) SetTorrents(torrents []api.Torrent) {
 		t.cursor = 0
 	}
 	// Update selected hash
-	if t.cursor < len(t.torrents) {
-		t.selectedHash = t.torrents[t.cursor].Hash
-	}
+	t.selectedHash = t.torrents[t.cursor].Hash
 }
 
 // Update handles messages
