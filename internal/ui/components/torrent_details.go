@@ -203,6 +203,37 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 
 // View renders the torrent details with tabs
 func (t *TorrentDetails) View() string {
+	fullContent := t.buildContent()
+
+	// Apply scrolling
+	lines := strings.Split(fullContent, "\n")
+	if t.height > 0 {
+		visibleLines := t.height - 2 // Account for borders
+		if visibleLines < 1 {
+			visibleLines = 1
+		}
+
+		maxScroll := len(lines) - visibleLines
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if t.scroll > maxScroll {
+			t.scroll = maxScroll
+		}
+
+		if len(lines) > visibleLines {
+			endLine := t.scroll + visibleLines
+			if endLine > len(lines) {
+				endLine = len(lines)
+			}
+			lines = lines[t.scroll:endLine]
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (t *TorrentDetails) buildContent() string {
 	if t.torrent == nil {
 		return styles.DimStyle.Render("No torrent selected")
 	}
@@ -242,34 +273,7 @@ func (t *TorrentDetails) View() string {
 	help := styles.DimStyle.Render("↑↓ scroll • ←→ or 1-4 tabs • Tab cycle • Esc back")
 	sections = append(sections, help)
 
-	fullContent := strings.Join(sections, "\n\n")
-
-	// Apply scrolling
-	lines := strings.Split(fullContent, "\n")
-	if t.height > 0 {
-		visibleLines := t.height - 2 // Account for borders
-		if visibleLines < 1 {
-			visibleLines = 1
-		}
-
-		maxScroll := len(lines) - visibleLines
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		if t.scroll > maxScroll {
-			t.scroll = maxScroll
-		}
-
-		if len(lines) > visibleLines {
-			endLine := t.scroll + visibleLines
-			if endLine > len(lines) {
-				endLine = len(lines)
-			}
-			lines = lines[t.scroll:endLine]
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return strings.Join(sections, "\n\n")
 }
 
 // renderTabBar renders the tab navigation bar
@@ -546,9 +550,21 @@ func (t *TorrentDetails) renderFilesTab() string {
 // Helper methods (keeping existing ones and adding new ones)
 
 func (t *TorrentDetails) getMaxScroll() int {
-	// This would need to calculate based on content and height
-	// For now, return a reasonable default
-	return 50
+	if t.height <= 0 {
+		return 0
+	}
+
+	visibleLines := t.height - 2 // Account for borders
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+
+	lines := strings.Split(t.buildContent(), "\n")
+	maxScroll := len(lines) - visibleLines
+	if maxScroll < 0 {
+		return 0
+	}
+	return maxScroll
 }
 
 func (t *TorrentDetails) getTrackerStatus(status int) string {
