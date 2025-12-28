@@ -602,6 +602,9 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case directoryContentMsg:
 		if m.locationDialog != nil && m.locationDialog.remoteNav != nil {
 			nav := m.locationDialog.remoteNav
+			if msg.path != nav.currentPath {
+				break
+			}
 			nav.loading = false
 			if msg.err != nil {
 				nav.loadError = msg.err
