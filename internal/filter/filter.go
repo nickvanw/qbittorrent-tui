@@ -33,7 +33,7 @@ func (f *Filter) Apply(torrents []api.Torrent) []api.Torrent {
 		return []api.Torrent{}
 	}
 
-	filtered := make([]api.Torrent, 0)
+	filtered := make([]api.Torrent, 0, len(torrents))
 	for _, t := range torrents {
 		if f.matches(t) {
 			filtered = append(filtered, t)

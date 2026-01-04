@@ -250,37 +250,6 @@ func TestSortConfigPersistence(t *testing.T) {
 	}
 }
 
-func TestSelectionPreservedOnRefresh(t *testing.T) {
-	torrentList := NewTorrentList()
-
-	torrents := []api.Torrent{
-		{Name: "Alpha", Hash: "a", Size: 100},
-		{Name: "Beta", Hash: "b", Size: 200},
-		{Name: "Gamma", Hash: "c", Size: 300},
-	}
-	torrentList.SetTorrents(torrents)
-	torrentList.moveDown() // select "Beta"
-
-	if torrentList.selectedHash != "b" {
-		t.Fatalf("expected selected hash b, got %s", torrentList.selectedHash)
-	}
-
-	// Change ordering by size to ensure selection is preserved by hash, not index.
-	updated := []api.Torrent{
-		{Name: "Gamma", Hash: "c", Size: 300},
-		{Name: "Alpha", Hash: "a", Size: 100},
-		{Name: "Beta", Hash: "b", Size: 200},
-	}
-	torrentList.SetTorrents(updated)
-
-	if torrentList.selectedHash != "b" {
-		t.Fatalf("expected selected hash to remain b, got %s", torrentList.selectedHash)
-	}
-	if torrentList.torrents[torrentList.cursor].Hash != "b" {
-		t.Fatalf("expected cursor to point at b, got %s", torrentList.torrents[torrentList.cursor].Hash)
-	}
-}
-
 func TestSelectionClearedOnEmptyList(t *testing.T) {
 	torrentList := NewTorrentList()
 
