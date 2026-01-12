@@ -29,6 +29,12 @@ func SetTerminalTitle(title string) string {
 	return fmt.Sprintf("\033]0;%s\007", title)
 }
 
+// ResetTerminalTitle prints an escape sequence to reset the terminal title
+// This sets an empty title, allowing the terminal to restore its default behavior
+func ResetTerminalTitle() {
+	fmt.Print("\033]0;\007")
+}
+
 // formatSpeed formats bytes per second into plain text human-readable format
 // This is specifically for terminal titles and does not include any ANSI codes
 func formatSpeed(bytesPerSec int64) string {
