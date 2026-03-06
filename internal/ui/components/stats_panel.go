@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 )
@@ -64,10 +64,7 @@ func (s *StatsPanel) View() string {
 	// Join sections horizontally
 	content := lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 
-	// Add title
-	title := styles.TitleStyle.Render("Global Statistics")
-
-	return lipgloss.JoinVertical(lipgloss.Left, title, content)
+	return content
 }
 
 // renderConnectionStatus renders the connection status section

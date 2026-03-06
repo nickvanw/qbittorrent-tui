@@ -4,9 +4,19 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 )
+
+// keyPress creates a tea.KeyPressMsg for a printable character
+func keyPress(r rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: r, Text: string(r)}
+}
+
+// specialKeyPress creates a tea.KeyPressMsg for a special key (Enter, Esc, etc.)
+func specialKeyPress(code rune) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: code}
+}
 
 func TestFilterPanel_BasicFunctionality(t *testing.T) {
 	panel := NewFilterPanel()
@@ -16,12 +26,12 @@ func TestFilterPanel_BasicFunctionality(t *testing.T) {
 	assert.True(t, panel.filter.IsEmpty())
 
 	// Test entering search mode with "/"
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	assert.Equal(t, FilterModeSearch, panel.mode)
 
 	// Test entering search mode with "f"
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	panel, _ = panel.Update(keyPress('f'))
 	assert.Equal(t, FilterModeSearch, panel.mode)
 }
 
@@ -29,13 +39,15 @@ func TestFilterPanel_SearchMode(t *testing.T) {
 	panel := NewFilterPanel()
 
 	// Enter search mode
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 
-	// Type some text
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t', 'e', 's', 't'}})
+	// Type some text (one character at a time in v2)
+	for _, r := range "test" {
+		panel, _ = panel.Update(keyPress(r))
+	}
 
 	// Apply search with Enter
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	panel, _ = panel.Update(specialKeyPress(tea.KeyEnter))
 
 	assert.Equal(t, FilterModeNone, panel.mode)
 	assert.Equal(t, "test", panel.filter.Search)
@@ -52,7 +64,7 @@ func TestFilterPanel_ClearFilters(t *testing.T) {
 	assert.False(t, panel.filter.IsEmpty())
 
 	// Clear filters with "x"
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	panel, _ = panel.Update(keyPress('x'))
 
 	assert.True(t, panel.filter.IsEmpty())
 	assert.Equal(t, "", panel.filter.Search)
@@ -64,20 +76,20 @@ func TestFilterPanel_StateFilterMode(t *testing.T) {
 	panel := NewFilterPanel()
 
 	// Enter state filter mode
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	panel, _ = panel.Update(keyPress('s'))
 	assert.Equal(t, FilterModeState, panel.mode)
 	assert.Equal(t, 0, panel.cursor)
 
 	// Move cursor down
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	panel, _ = panel.Update(keyPress('j'))
 	assert.Equal(t, 1, panel.cursor)
 
 	// Toggle selection
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	panel, _ = panel.Update(keyPress(' '))
 	assert.Contains(t, panel.filter.States, panel.availableStates[1])
 
 	// Exit with Escape
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	panel, _ = panel.Update(specialKeyPress(tea.KeyEscape))
 	assert.Equal(t, FilterModeNone, panel.mode)
 }
 
@@ -90,14 +102,14 @@ func TestFilterPanel_ViewRendering(t *testing.T) {
 	assert.Contains(t, view, "Press:")
 
 	// Test search mode view
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	view = panel.View()
 	assert.Contains(t, view, "Search:")
 	assert.Contains(t, view, "Enter save")
 
 	// Test state filter mode view
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	panel, _ = panel.Update(keyPress('s'))
 	view = panel.View()
 	assert.Contains(t, view, "Select State:")
 	assert.Contains(t, view, "downloading")
@@ -110,26 +122,26 @@ func TestFilterPanel_InputMode(t *testing.T) {
 	assert.False(t, panel.IsInInputMode())
 
 	// Should be in input mode when in search mode
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	assert.True(t, panel.IsInInputMode())
 
 	// Should not be in input mode when in state filter mode
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	panel, _ = panel.Update(keyPress('s'))
 	assert.False(t, panel.IsInInputMode())
 
 	// Should exit input mode on escape
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	assert.True(t, panel.IsInInputMode())
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	panel, _ = panel.Update(specialKeyPress(tea.KeyEscape))
 	assert.False(t, panel.IsInInputMode())
 
 	// Should exit input mode on enter
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	assert.True(t, panel.IsInInputMode())
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	panel, _ = panel.Update(specialKeyPress(tea.KeyEnter))
 	assert.False(t, panel.IsInInputMode())
 }
 
@@ -140,24 +152,24 @@ func TestFilterPanel_InteractiveMode(t *testing.T) {
 	assert.False(t, panel.IsInInteractiveMode())
 
 	// Should be in interactive mode when in search mode
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	panel, _ = panel.Update(keyPress('/'))
 	assert.True(t, panel.IsInInteractiveMode())
 
 	// Should be in interactive mode when in state filter mode
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	panel, _ = panel.Update(keyPress('s'))
 	assert.True(t, panel.IsInInteractiveMode())
 
 	// Should be in interactive mode when in category filter mode
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	panel, _ = panel.Update(keyPress('c'))
 	assert.True(t, panel.IsInInteractiveMode())
 
 	// Should exit interactive mode on escape
 	panel = NewFilterPanel()
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	panel, _ = panel.Update(keyPress('s'))
 	assert.True(t, panel.IsInInteractiveMode())
-	panel, _ = panel.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	panel, _ = panel.Update(specialKeyPress(tea.KeyEscape))
 	assert.False(t, panel.IsInInteractiveMode())
 }
 
