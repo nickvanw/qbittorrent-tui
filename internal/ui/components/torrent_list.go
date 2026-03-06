@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 )
@@ -184,7 +184,7 @@ func (t *TorrentList) SetTorrents(torrents []api.Torrent) {
 // Update handles messages
 func (t *TorrentList) Update(msg tea.Msg) (*TorrentList, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Handle column configuration mode
 		if t.showConfig {
 			switch msg.String() {
@@ -918,7 +918,7 @@ func (t *TorrentList) renderWithColumnConfig() string {
 		lipgloss.Center, lipgloss.Top,
 		box,
 		lipgloss.WithWhitespaceChars(" "),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("#1a1a1a")))
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#1a1a1a"))))
 
 	return finalView
 }

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 )
@@ -152,7 +152,7 @@ func (t *TorrentDetails) Update(msg tea.Msg) (*TorrentDetails, tea.Cmd) {
 			t.sortTrackers()
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		// Tab navigation
 		case key.Matches(msg, key.NewBinding(key.WithKeys("1"))):

@@ -5,7 +5,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -30,7 +30,7 @@ var (
 	PanelStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(DimTextColor).
-			Padding(1, 2, 0, 2)
+			Padding(0, 2)
 
 	FocusedPanelStyle = PanelStyle.
 				BorderForeground(PrimaryColor)

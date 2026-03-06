@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/filter"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/styles"
 )
@@ -95,7 +95,7 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch f.mode {
 		case FilterModeSearch:
 			switch msg.String() {
@@ -127,7 +127,7 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 				// Enter exits interactive mode (marking as "done")
 				f.mode = FilterModeNone
 				f.cursor = 0
-			case " ":
+			case " ", "space":
 				f.toggleSelection()
 			case "a":
 				f.selectAll()

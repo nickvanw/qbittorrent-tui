@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
 	"github.com/nickvanw/qbittorrent-tui/internal/filter"
@@ -301,11 +301,11 @@ func NewMainView(cfg *config.Config, client api.ClientInterface) *MainView {
 
 // Init initializes the view
 func (m *MainView) Init() tea.Cmd {
+	m.updateTerminalTitle()
 	return tea.Batch(
 		m.fetchAllData(),
 		m.tickCmd(),
 		m.uiTickCmd(),
-		m.updateTerminalTitle(),
 	)
 }
 
@@ -561,7 +561,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Update terminal title after torrent data received
-		cmds = append(cmds, m.updateTerminalTitle())
+		m.updateTerminalTitle()
 
 	case categoriesDataMsg:
 		m.categories = map[string]interface{}(msg)
@@ -648,7 +648,7 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Continue the UI tick
 		cmds = append(cmds, m.uiTickCmd())
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Handle add torrent dialog first (highest priority)
 		if m.showAddDialog {
 			switch msg.String() {
@@ -951,19 +951,32 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the view
-func (m *MainView) View() string {
+func (m *MainView) View() tea.View {
+	var content string
+
 	if m.width == 0 || m.height == 0 {
-		return "Loading..."
+		content = "Loading..."
+	} else if m.viewMode == ViewModeDetails {
+		content = m.renderDetailsView()
+	} else {
+		content = m.renderMainView()
 	}
 
-	// Check if we're in details mode
-	if m.viewMode == ViewModeDetails {
-		return m.renderDetailsView()
+	view := tea.NewView(content)
+	view.AltScreen = true
+
+	// Set terminal title declaratively
+	if m.config.UI.TerminalTitle.Enabled && m.lastRenderedTitle != "" {
+		view.WindowTitle = m.lastRenderedTitle
 	}
 
+	return view
+}
+
+// renderMainView renders the main torrent list view
+func (m *MainView) renderMainView() string {
 	// Calculate layout dimensions
 	helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
-	contentHeight := m.height - helpHeight - 1
 
 	// Stats panel height (fixed)
 	statsHeight := 5
@@ -972,7 +985,9 @@ func (m *MainView) View() string {
 	filterHeight := 3
 
 	// Torrent list gets remaining space
-	torrentListHeight := contentHeight - statsHeight - filterHeight - 2 // 2 for borders
+	// Subtract 2 extra lines: the v2 renderer reserves the last line to avoid
+	// terminal scroll, and JoinVertical adds implicit line separators.
+	torrentListHeight := m.height - helpHeight - statsHeight - filterHeight - 2
 
 	// Create the layout
 	var sections []string
@@ -1027,7 +1042,8 @@ func (m *MainView) renderStatsPanel(width, height int) string {
 	style := styles.PanelStyle
 
 	// Fixed dimensions: stats panel is always 5 lines tall
-	m.statsPanel.SetDimensions(width-6, 2) // 5 total - 3 for borders/padding = 2 content
+	// Vertical overhead: 2 (borders only, no vertical padding)
+	m.statsPanel.SetDimensions(width-6, height-2)
 	m.statsPanel.SetLastRefreshTime(m.lastRefreshTime)
 
 	content := m.statsPanel.View()
@@ -1039,8 +1055,8 @@ func (m *MainView) renderTorrentList(width, height int) string {
 	style := styles.FocusedPanelStyle // Always focused
 
 	// Set dimensions for the torrent list component
-	// Account for panel borders (2) and padding (4 horizontal, 1 vertical)
-	m.torrentList.SetDimensions(width-6, height-3)
+	// Vertical overhead: 2 (borders only, no vertical padding)
+	m.torrentList.SetDimensions(width-6, height-2)
 
 	content := m.torrentList.View()
 	return style.Width(width).Height(height).Render(content)
@@ -1051,7 +1067,8 @@ func (m *MainView) renderFilterPanel(width, height int) string {
 	style := styles.PanelStyle
 
 	// Fixed dimensions: filter panel is always 3 lines tall
-	m.filterPanel.SetDimensions(width-6, 1) // 3 total - 2 for borders = 1 content line
+	// Vertical overhead: 2 (borders only, no vertical padding)
+	m.filterPanel.SetDimensions(width-6, height-2)
 
 	content := m.filterPanel.View()
 	return style.Width(width).Height(height).Render(content)
@@ -1063,8 +1080,7 @@ func (m *MainView) updateDimensions() {
 	// Set dimensions for torrent details if in details mode
 	if m.viewMode == ViewModeDetails {
 		helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
-		contentHeight := m.height - helpHeight - 1
-		m.torrentDetails.SetSize(m.width-4, contentHeight-3)
+		m.torrentDetails.SetSize(m.width-4, m.height-helpHeight-2)
 	}
 }
 
@@ -1900,7 +1916,7 @@ func (m *MainView) handleFileNavigatorKeys(key string) tea.Cmd {
 }
 
 // handleURLInputKeys handles keyboard input for URL input
-func (m *MainView) handleURLInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
+func (m *MainView) handleURLInputKeys(keyMsg tea.KeyPressMsg) tea.Cmd {
 	urlInput := m.addDialog.urlInput
 
 	switch keyMsg.String() {
@@ -1917,9 +1933,9 @@ func (m *MainView) handleURLInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
 		urlInput.url = ""
 	default:
 		// Handle character input - this includes paste operations
-		// Bubble Tea provides the input as runes which handles multi-character paste
-		if len(keyMsg.Runes) > 0 {
-			for _, r := range keyMsg.Runes {
+		// Bubble Tea v2 provides the input as Text (string) instead of Runes
+		if len(keyMsg.Text) > 0 {
+			for _, r := range keyMsg.Text {
 				// Only add printable characters (includes all URL chars: :, /, ?, =, etc.)
 				if r >= 32 && r <= 126 {
 					urlInput.url += string(r)
@@ -1932,7 +1948,7 @@ func (m *MainView) handleURLInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
 }
 
 // handlePathInputKeys handles keyboard input for path text input
-func (m *MainView) handlePathInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
+func (m *MainView) handlePathInputKeys(keyMsg tea.KeyPressMsg) tea.Cmd {
 	pathInput := m.locationDialog.pathInput
 
 	switch keyMsg.String() {
@@ -1955,8 +1971,9 @@ func (m *MainView) handlePathInputKeys(keyMsg tea.KeyMsg) tea.Cmd {
 		pathInput.cursor = 0
 	default:
 		// Handle character input - this includes paste operations
-		if len(keyMsg.Runes) > 0 {
-			for _, r := range keyMsg.Runes {
+		// Bubble Tea v2 provides the input as Text (string) instead of Runes
+		if len(keyMsg.Text) > 0 {
+			for _, r := range keyMsg.Text {
 				// Only add printable characters (includes path chars: /, -, _, etc.)
 				if r >= 32 && r <= 126 {
 					pathInput.path += string(r)
@@ -2173,11 +2190,12 @@ func NewLocationDialog(apiClient api.ClientInterface, currentPath, torrentName s
 	}
 }
 
-// updateTerminalTitle updates the terminal window title if enabled
-func (m *MainView) updateTerminalTitle() tea.Cmd {
+// updateTerminalTitle computes and caches the terminal title string.
+// The title is applied declaratively via view.WindowTitle in View().
+func (m *MainView) updateTerminalTitle() {
 	// Skip if disabled or no template
 	if !m.config.UI.TerminalTitle.Enabled || m.config.UI.TerminalTitle.Template == "" {
-		return nil
+		return
 	}
 
 	// Calculate torrent counts
@@ -2204,20 +2222,8 @@ func (m *MainView) updateTerminalTitle() tea.Cmd {
 	// Render title template
 	renderedTitle, err := terminal.RenderTitle(m.config.UI.TerminalTitle.Template, titleData)
 	if err != nil {
-		// If template rendering fails, don't update title
-		return nil
-	}
-
-	// Only update if changed (avoid unnecessary writes)
-	if renderedTitle == m.lastRenderedTitle {
-		return nil
+		return
 	}
 
 	m.lastRenderedTitle = renderedTitle
-
-	// Return command to set terminal title
-	return func() tea.Msg {
-		fmt.Print(terminal.SetTerminalTitle(renderedTitle))
-		return nil
-	}
 }

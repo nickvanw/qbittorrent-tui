@@ -7,11 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/nickvanw/qbittorrent-tui/internal/api"
 	"github.com/nickvanw/qbittorrent-tui/internal/config"
 	"github.com/nickvanw/qbittorrent-tui/internal/logger"
-	"github.com/nickvanw/qbittorrent-tui/internal/ui/terminal"
 	"github.com/nickvanw/qbittorrent-tui/internal/ui/views"
 )
 
@@ -152,13 +151,8 @@ func run(cmd *cobra.Command, args []string) error {
 	// Initialize the main view with the API client
 	model := views.NewMainView(cfg, client)
 
-	// Create the program
-	p := tea.NewProgram(model, tea.WithAltScreen())
-
-	// Reset terminal title on exit if it was enabled
-	if cfg.UI.TerminalTitle.Enabled {
-		defer terminal.ResetTerminalTitle()
-	}
+	// Create the program (AltScreen and WindowTitle are now declarative in View())
+	p := tea.NewProgram(model)
 
 	// Run the program
 	if _, err := p.Run(); err != nil {
