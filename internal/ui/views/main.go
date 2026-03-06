@@ -978,7 +978,7 @@ func (m *MainView) renderMainView() string {
 	// Calculate layout dimensions
 	helpHeight := strings.Count(m.help.View(m.keys), "\n") + 1
 
-	// Stats panel height (fixed)
+	// Stats panel height (fixed: 3 content lines + 2 border lines)
 	statsHeight := 5
 
 	// Filter panel height (fixed)

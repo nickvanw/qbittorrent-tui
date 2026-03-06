@@ -64,10 +64,7 @@ func (s *StatsPanel) View() string {
 	// Join sections horizontally
 	content := lipgloss.JoinHorizontal(lipgloss.Top, sections...)
 
-	// Add title
-	title := styles.TitleStyle.Render("Global Statistics")
-
-	return lipgloss.JoinVertical(lipgloss.Left, title, content)
+	return content
 }
 
 // renderConnectionStatus renders the connection status section
