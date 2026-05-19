@@ -234,7 +234,7 @@ func formatPartialTorrent(partial *api.PartialTorrent) []any {
 
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
-		if field.Kind() == reflect.Ptr && !field.IsNil() {
+		if field.Kind() == reflect.Pointer && !field.IsNil() {
 			// Get JSON tag for field name, fall back to lowercase field name
 			fieldName := t.Field(i).Tag.Get("json")
 			if fieldName == "" {

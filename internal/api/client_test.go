@@ -150,11 +150,13 @@ func TestClientAPIKeyHostMismatch(t *testing.T) {
 	resp, err := tr.RoundTrip(matching)
 	require.NoError(t, err)
 	assert.Equal(t, "Bearer "+key, resp.Request.Header.Get("Authorization"), "matching host should carry the bearer token")
+	resp.Body.Close()
 
 	foreign, _ := http.NewRequest(http.MethodGet, "http://evil.example.com/steal", nil)
 	resp, err = tr.RoundTrip(foreign)
 	require.NoError(t, err)
 	assert.Empty(t, resp.Request.Header.Get("Authorization"), "foreign host must not receive the bearer token")
+	resp.Body.Close()
 }
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
