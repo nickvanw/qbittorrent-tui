@@ -67,6 +67,7 @@ func TestClientLogin(t *testing.T) {
 		response      string
 		statusCode    int
 		setCookie     bool
+		cookieName    string
 		expectError   bool
 		errorContains string
 	}{
@@ -77,6 +78,18 @@ func TestClientLogin(t *testing.T) {
 			response:   "Ok.",
 			statusCode: http.StatusOK,
 			setCookie:  true,
+			cookieName: "SID",
+		},
+		{
+			// qBittorrent 5.2.0+ returns 204 No Content with a port-suffixed
+			// QBT_SID cookie instead of 200 OK + SID.
+			name:       "successful login (qBittorrent 5.2.0)",
+			username:   "admin",
+			password:   "password",
+			response:   "",
+			statusCode: http.StatusNoContent,
+			setCookie:  true,
+			cookieName: "QBT_SID_8112",
 		},
 		{
 			name:          "invalid credentials",
@@ -112,7 +125,7 @@ func TestClientLogin(t *testing.T) {
 
 				if tt.setCookie {
 					http.SetCookie(w, &http.Cookie{
-						Name:  "SID",
+						Name:  tt.cookieName,
 						Value: "test-session-id",
 						Path:  "/",
 					})
@@ -141,13 +154,13 @@ func TestClientLogin(t *testing.T) {
 					cookies := client.httpClient.Jar.Cookies(serverURL)
 					found := false
 					for _, c := range cookies {
-						if c.Name == "SID" {
+						if c.Name == tt.cookieName {
 							found = true
 							assert.Equal(t, "test-session-id", c.Value)
 							break
 						}
 					}
-					assert.True(t, found, "SID cookie not found")
+					assert.True(t, found, "session cookie %q not found", tt.cookieName)
 				}
 			}
 		})
@@ -331,6 +344,55 @@ func TestClientGetGlobalStats(t *testing.T) {
 				assert.Equal(t, mockStats.ConnectionStatus, stats.ConnectionStatus)
 			}
 		})
+	}
+}
+
+// TestClientActionEndpointsAcceptStatus verifies that all action (write)
+// endpoints accept both 200 OK (qBittorrent <5.2) and 204 No Content
+// (qBittorrent 5.2.0+). qBittorrent 5.2 changed write endpoints to return
+// 204 since they have no response body.
+func TestClientActionEndpointsAcceptStatus(t *testing.T) {
+	statusCodes := []int{http.StatusOK, http.StatusNoContent}
+
+	actions := []struct {
+		name string
+		path string
+		call func(c *Client, ctx context.Context) error
+	}{
+		{"PauseTorrents", "/api/v2/torrents/stop", func(c *Client, ctx context.Context) error {
+			return c.PauseTorrents(ctx, []string{"hash1"})
+		}},
+		{"ResumeTorrents", "/api/v2/torrents/start", func(c *Client, ctx context.Context) error {
+			return c.ResumeTorrents(ctx, []string{"hash1"})
+		}},
+		{"DeleteTorrents", "/api/v2/torrents/delete", func(c *Client, ctx context.Context) error {
+			return c.DeleteTorrents(ctx, []string{"hash1"}, false)
+		}},
+		{"AddTorrentURL", "/api/v2/torrents/add", func(c *Client, ctx context.Context) error {
+			return c.AddTorrentURL(ctx, "magnet:?xt=urn:btih:abc")
+		}},
+		{"SetTorrentLocation", "/api/v2/torrents/setLocation", func(c *Client, ctx context.Context) error {
+			return c.SetTorrentLocation(ctx, []string{"hash1"}, "/downloads")
+		}},
+	}
+
+	for _, action := range actions {
+		for _, code := range statusCodes {
+			t.Run(fmt.Sprintf("%s/%d", action.name, code), func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					assert.Equal(t, action.path, r.URL.Path)
+					assert.Equal(t, "POST", r.Method)
+					w.WriteHeader(code)
+				}))
+				defer server.Close()
+
+				client, err := NewClient(server.URL)
+				require.NoError(t, err)
+
+				err = action.call(client, context.Background())
+				assert.NoError(t, err)
+			})
+		}
 	}
 }
 

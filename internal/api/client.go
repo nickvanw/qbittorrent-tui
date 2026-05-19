@@ -22,6 +22,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// isSuccessStatus reports whether the HTTP status code is in the 2xx range.
+// qBittorrent 5.2.0+ returns 204 No Content for endpoints with no response
+// body; older versions returned 200 OK.
+func isSuccessStatus(code int) bool {
+	return code >= 200 && code < 300
+}
+
 func NewClient(baseURL string) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -66,7 +73,7 @@ func (c *Client) Login(username, password string) error {
 		return NewNetworkError("failed to read response body", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return NewAuthError(fmt.Sprintf("authentication failed: %s", string(body)), nil)
 		}
@@ -78,14 +85,15 @@ func (c *Client) Login(username, password string) error {
 		return NewAuthError("invalid username or password", nil)
 	}
 
-	// Check if we got the SID cookie
+	// Check if we got a session cookie. qBittorrent <5.2 used "SID";
+	// 5.2+ uses "QBT_SID_<port>" (e.g. QBT_SID_8112).
 	for _, cookie := range c.httpClient.Jar.Cookies(resp.Request.URL) {
-		if cookie.Name == "SID" {
+		if cookie.Name == "SID" || strings.HasPrefix(cookie.Name, "QBT_SID") {
 			return nil
 		}
 	}
 
-	return NewServerError(0, "no SID cookie received", nil)
+	return NewServerError(0, "no session cookie received", nil)
 }
 
 func (c *Client) GetTorrents(ctx context.Context) ([]Torrent, error) {
@@ -228,7 +236,7 @@ func (c *Client) PauseTorrents(ctx context.Context, hashes []string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -260,7 +268,7 @@ func (c *Client) ResumeTorrents(ctx context.Context, hashes []string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -297,7 +305,7 @@ func (c *Client) DeleteTorrents(ctx context.Context, hashes []string, deleteFile
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -349,7 +357,7 @@ func (c *Client) AddTorrentFile(ctx context.Context, filePath string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -379,7 +387,7 @@ func (c *Client) AddTorrentURL(ctx context.Context, torrentURL string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -409,7 +417,7 @@ func (c *Client) SetTorrentLocation(ctx context.Context, hashes []string, newLoc
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		return WrapHTTPError(resp, nil)
 	}
 
@@ -459,7 +467,7 @@ func (c *Client) get(ctx context.Context, endpoint string, v interface{}) error 
 		return NewAuthError("authentication required (403 Forbidden)", nil)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if !isSuccessStatus(resp.StatusCode) {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return NewNetworkError(fmt.Sprintf("failed to read error response (status %d)", resp.StatusCode), err)

@@ -27,7 +27,7 @@ func TestClientIntegration(t *testing.T) {
 	// Check if auth is bypassed (for subnet whitelist config)
 	authBypassed := false
 	resp, err := http.Get(serverURL + "/api/v2/app/version")
-	if err == nil && resp.StatusCode == 200 {
+	if err == nil && isSuccessStatus(resp.StatusCode) {
 		authBypassed = true
 		resp.Body.Close()
 		t.Log("Authentication is bypassed - using subnet whitelist")
