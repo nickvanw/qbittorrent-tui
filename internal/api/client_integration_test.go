@@ -33,6 +33,10 @@ func TestClientIntegration(t *testing.T) {
 		t.Log("Authentication is bypassed - using subnet whitelist")
 	}
 
+	// API-key auth (qBittorrent ≥5.2.0) is preferred when QBT_TEST_API_KEY is
+	// set; it skips the user/pass login flow entirely.
+	apiKey := os.Getenv("QBT_TEST_API_KEY")
+
 	// Use credentials from environment or defaults
 	username := os.Getenv("QBT_TEST_USERNAME")
 	if username == "" {
@@ -40,14 +44,14 @@ func TestClientIntegration(t *testing.T) {
 	}
 
 	password := os.Getenv("QBT_TEST_PASSWORD")
-	if password == "" && !authBypassed {
-		t.Fatal("QBT_TEST_PASSWORD environment variable is required when auth is not bypassed.")
+	if password == "" && !authBypassed && apiKey == "" {
+		t.Fatal("QBT_TEST_PASSWORD environment variable is required when auth is not bypassed and QBT_TEST_API_KEY is unset.")
 	}
 	if password == "" {
 		password = "dummy" // Won't be used but API client expects something
 	}
 
-	t.Logf("Testing with URL: %s, Auth bypassed: %v", serverURL, authBypassed)
+	t.Logf("Testing with URL: %s, Auth bypassed: %v, API key: %v", serverURL, authBypassed, apiKey != "")
 
 	// First check if the server is reachable
 	resp2, err2 := http.Get(serverURL)
@@ -56,22 +60,32 @@ func TestClientIntegration(t *testing.T) {
 	}
 	resp2.Body.Close()
 
-	client, err := NewClient(serverURL)
-	require.NoError(t, err)
+	var client *Client
+	if apiKey != "" {
+		c, err := NewClientWithAPIKey(serverURL, apiKey)
+		require.NoError(t, err)
+		client = c
+	} else {
+		c, err := NewClient(serverURL)
+		require.NoError(t, err)
+		client = c
+	}
 
 	ctx := context.Background()
 
-	t.Run("Login", func(t *testing.T) {
-		err := client.Login(username, password)
-		if authBypassed && err != nil {
-			// Login might fail but API calls should still work
-			t.Logf("Login returned error (expected with auth bypass): %v", err)
-		} else if !authBypassed && err != nil {
-			t.Fatalf("Login failed: %v", err)
-		} else {
-			t.Log("Login successful")
-		}
-	})
+	if apiKey == "" {
+		t.Run("Login", func(t *testing.T) {
+			err := client.Login(username, password)
+			if authBypassed && err != nil {
+				// Login might fail but API calls should still work
+				t.Logf("Login returned error (expected with auth bypass): %v", err)
+			} else if !authBypassed && err != nil {
+				t.Fatalf("Login failed: %v", err)
+			} else {
+				t.Log("Login successful")
+			}
+		})
+	}
 
 	t.Run("GetTorrents", func(t *testing.T) {
 		torrents, err := client.GetTorrents(ctx)

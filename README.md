@@ -57,6 +57,18 @@ password = "secret"
 refresh_interval = 3
 ```
 
+### Authentication
+
+Choose **either** `username` + `password` **or** `api_key` — not both. Mixing them causes startup to fail.
+
+API keys (qBittorrent 5.2.0+) are stateless and skip the login round-trip. Generate one in qBittorrent under **Preferences → WebUI → API Key**.
+
+```toml
+[server]
+url = "http://localhost:8080"
+api_key = "qbt_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
 ### Environment Variables / CLI Options
 
 ```bash
@@ -64,9 +76,12 @@ refresh_interval = 3
 export QBT_SERVER_URL="http://localhost:8080"
 export QBT_SERVER_USERNAME="admin"
 export QBT_SERVER_PASSWORD="secret"
+# or, instead of USERNAME/PASSWORD:
+export QBT_SERVER_API_KEY="qbt_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # CLI
 qbt-tui --url http://localhost:8080 --username admin --password secret
+qbt-tui --url http://localhost:8080 --api-key qbt_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 qbt-tui --help  # See all options
 ```
 

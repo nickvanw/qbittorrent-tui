@@ -29,6 +29,22 @@ func isSuccessStatus(code int) bool {
 	return code >= 200 && code < 300
 }
 
+// bearerAuthTransport injects "Authorization: Bearer <key>" on every outgoing
+// request. Used for qBittorrent's stateless API-key auth (≥5.2.0). Per the
+// qBittorrent docs, API keys cannot be used against /api/v2/auth/login or
+// /api/v2/auth/logout, so a client built with this transport must not call
+// Login.
+type bearerAuthTransport struct {
+	key  string
+	base http.RoundTripper
+}
+
+func (t *bearerAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Header.Set("Authorization", "Bearer "+t.key)
+	return t.base.RoundTrip(clone)
+}
+
 func NewClient(baseURL string) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -40,6 +56,27 @@ func NewClient(baseURL string) (*Client, error) {
 		httpClient: &http.Client{
 			Jar:     jar,
 			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+// NewClientWithAPIKey returns a Client that authenticates via qBittorrent's
+// stateless API-key mechanism (≥5.2.0). The key is sent as an
+// "Authorization: Bearer <key>" header on every request. Callers must not
+// invoke Login on a client built this way — qBittorrent rejects API keys at
+// /api/v2/auth/login and /api/v2/auth/logout.
+func NewClientWithAPIKey(baseURL, apiKey string) (*Client, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, NewValidationError("failed to create cookie jar", err)
+	}
+
+	return &Client{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		httpClient: &http.Client{
+			Jar:       jar,
+			Timeout:   10 * time.Second,
+			Transport: &bearerAuthTransport{key: apiKey, base: http.DefaultTransport},
 		},
 	}, nil
 }

@@ -19,6 +19,7 @@ var (
 	serverURL  string
 	username   string
 	password   string
+	apiKey     string
 	refreshInt int
 	debugMode  bool
 	logFile    string
@@ -50,8 +51,9 @@ CONFIGURATION:
 
   Environment variables (prefix QBT_):
     QBT_SERVER_URL           qBittorrent WebUI URL
-    QBT_SERVER_USERNAME      qBittorrent username  
+    QBT_SERVER_USERNAME      qBittorrent username
     QBT_SERVER_PASSWORD      qBittorrent password
+    QBT_SERVER_API_KEY       qBittorrent API key (≥5.2.0, alternative to user/pass)
     QBT_UI_REFRESH_INTERVAL  Refresh interval in seconds (default: 3)
 
 EXAMPLES:
@@ -108,6 +110,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&serverURL, "url", "u", "", "qBittorrent WebUI URL")
 	rootCmd.Flags().StringVar(&username, "username", "", "qBittorrent username")
 	rootCmd.Flags().StringVarP(&password, "password", "p", "", "qBittorrent password")
+	rootCmd.Flags().StringVar(&apiKey, "api-key", "", "qBittorrent API key (≥5.2.0, alternative to username/password)")
 
 	// UI configuration flags
 	rootCmd.Flags().IntVarP(&refreshInt, "refresh", "r", 3, "refresh interval in seconds (default: 3)")
@@ -138,14 +141,23 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.Close()
 
-	// Create and connect API client
-	client, err := api.NewClient(cfg.Server.URL)
-	if err != nil {
-		return fmt.Errorf("failed to create API client: %w", err)
-	}
-
-	if err := client.Login(cfg.Server.Username, cfg.Server.Password); err != nil {
-		return fmt.Errorf("failed to connect to qBittorrent API: %w", err)
+	// Create and connect API client. API-key auth (qBittorrent ≥5.2.0) is
+	// stateless and skips the /auth/login round-trip; the docs forbid using
+	// API keys against /auth/login. Otherwise fall back to user/pass login.
+	var client *api.Client
+	if cfg.Server.APIKey != "" {
+		client, err = api.NewClientWithAPIKey(cfg.Server.URL, cfg.Server.APIKey)
+		if err != nil {
+			return fmt.Errorf("failed to create API client: %w", err)
+		}
+	} else {
+		client, err = api.NewClient(cfg.Server.URL)
+		if err != nil {
+			return fmt.Errorf("failed to create API client: %w", err)
+		}
+		if err := client.Login(cfg.Server.Username, cfg.Server.Password); err != nil {
+			return fmt.Errorf("failed to connect to qBittorrent API: %w", err)
+		}
 	}
 
 	// Initialize the main view with the API client

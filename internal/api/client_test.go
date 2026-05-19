@@ -26,6 +26,76 @@ func TestNewClient(t *testing.T) {
 	assert.NotNil(t, client.httpClient.Jar)
 }
 
+func TestNewClientWithAPIKey(t *testing.T) {
+	client, err := NewClientWithAPIKey("http://localhost:8080/", "qbt_testkeytestkeytestkeytestkey")
+	require.NoError(t, err)
+	assert.NotNil(t, client)
+	assert.Equal(t, "http://localhost:8080", client.baseURL, "trailing slash should be trimmed")
+	assert.NotNil(t, client.httpClient)
+	assert.NotNil(t, client.httpClient.Jar)
+	require.NotNil(t, client.httpClient.Transport, "transport should be wired for bearer auth")
+	bt, ok := client.httpClient.Transport.(*bearerAuthTransport)
+	require.True(t, ok, "transport should be *bearerAuthTransport")
+	assert.Equal(t, "qbt_testkeytestkeytestkeytestkey", bt.key)
+}
+
+// TestClientAPIKeyHeader verifies that a client built with NewClientWithAPIKey
+// sends "Authorization: Bearer <key>" on every outgoing request — both reads
+// and write actions — and that no session cookie is established (qBittorrent's
+// API-key auth is stateless).
+func TestClientAPIKeyHeader(t *testing.T) {
+	const key = "qbt_testkeytestkeytestkeytestkey"
+	wantAuth := "Bearer " + key
+
+	cases := []struct {
+		name string
+		path string
+		call func(c *Client, ctx context.Context) error
+	}{
+		{"GetTorrents", "/api/v2/torrents/info", func(c *Client, ctx context.Context) error {
+			_, err := c.GetTorrents(ctx)
+			return err
+		}},
+		{"PauseTorrents", "/api/v2/torrents/stop", func(c *Client, ctx context.Context) error {
+			return c.PauseTorrents(ctx, []string{"hash1"})
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var sawAuth string
+			var sawCookies []*http.Cookie
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, tc.path, r.URL.Path)
+				sawAuth = r.Header.Get("Authorization")
+				sawCookies = r.Cookies()
+				// GetTorrents needs a JSON body; the action endpoint is fine with 204.
+				if r.Method == http.MethodGet {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte("[]"))
+					return
+				}
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+
+			client, err := NewClientWithAPIKey(server.URL, key)
+			require.NoError(t, err)
+
+			err = tc.call(client, context.Background())
+			require.NoError(t, err)
+
+			assert.Equal(t, wantAuth, sawAuth, "Authorization header missing or wrong")
+			assert.Empty(t, sawCookies, "API-key auth must not send cookies")
+
+			// Cookie jar should also be empty after the call — the server
+			// never issues a session cookie under API-key auth.
+			serverURL, _ := url.Parse(server.URL)
+			assert.Empty(t, client.httpClient.Jar.Cookies(serverURL), "cookie jar should stay empty")
+		})
+	}
+}
+
 func TestLoginWithActualServer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping actual server test in short mode")

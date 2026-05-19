@@ -13,12 +13,17 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ServerConfig holds qBittorrent connection settings. Authenticate with
+// either Username+Password OR APIKey (qBittorrent ≥5.2.0) — not both.
+type ServerConfig struct {
+	URL      string `mapstructure:"url"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	APIKey   string `mapstructure:"api_key"`
+}
+
 type Config struct {
-	Server struct {
-		URL      string `mapstructure:"url"`
-		Username string `mapstructure:"username"`
-		Password string `mapstructure:"password"`
-	} `mapstructure:"server"`
+	Server ServerConfig `mapstructure:"server"`
 
 	UI struct {
 		RefreshInterval int      `mapstructure:"refresh_interval"`
@@ -63,6 +68,7 @@ func Load(cmd *cobra.Command) (*Config, error) {
 	viper.BindEnv("server.url", "QBT_SERVER_URL")
 	viper.BindEnv("server.username", "QBT_SERVER_USERNAME")
 	viper.BindEnv("server.password", "QBT_SERVER_PASSWORD")
+	viper.BindEnv("server.api_key", "QBT_SERVER_API_KEY")
 	viper.BindEnv("ui.refresh_interval", "QBT_UI_REFRESH_INTERVAL")
 	viper.BindEnv("ui.columns", "QBT_UI_COLUMNS")
 	viper.BindEnv("ui.default_sort.column", "QBT_UI_DEFAULT_SORT_COLUMN")
@@ -101,6 +107,9 @@ func Load(cmd *cobra.Command) (*Config, error) {
 		if err := bindFlag("server.password", "password"); err != nil {
 			return nil, err
 		}
+		if err := bindFlag("server.api_key", "api-key"); err != nil {
+			return nil, err
+		}
 		if err := bindFlag("ui.refresh_interval", "refresh"); err != nil {
 			return nil, err
 		}
@@ -127,6 +136,10 @@ func Load(cmd *cobra.Command) (*Config, error) {
 func (c *Config) validate() error {
 	if c.Server.URL == "" {
 		return fmt.Errorf("server.url is required")
+	}
+
+	if c.Server.APIKey != "" && (c.Server.Username != "" || c.Server.Password != "") {
+		return fmt.Errorf("server.api_key cannot be combined with server.username or server.password — choose one auth method")
 	}
 
 	if c.UI.RefreshInterval < 1 {
