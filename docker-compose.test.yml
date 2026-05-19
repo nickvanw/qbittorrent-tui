@@ -1,7 +1,7 @@
 version: '3'
 services:
   qbittorrent:
-    image: linuxserver/qbittorrent:latest
+    image: lscr.io/linuxserver/qbittorrent:5.2.0
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
