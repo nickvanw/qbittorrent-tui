@@ -93,6 +93,39 @@ refresh_interval = 0`,
 			wantErr:     true,
 			errContains: "refresh_interval must be at least 1 second",
 		},
+		{
+			name: "api_key in config file",
+			configData: `[server]
+url = "http://localhost:8080"
+api_key = "qbt_testkeytestkeytestkeytestkey"`,
+			wantErr: false,
+			validate: func(t *testing.T, cfg *Config) {
+				assert.Equal(t, "qbt_testkeytestkeytestkeytestkey", cfg.Server.APIKey)
+				assert.Empty(t, cfg.Server.Username)
+				assert.Empty(t, cfg.Server.Password)
+			},
+		},
+		{
+			name: "api_key via env var",
+			configData: `[server]
+url = "http://localhost:8080"`,
+			envVars: map[string]string{
+				"QBT_SERVER_API_KEY": "qbt_envkeyenvkeyenvkeyenvkeyenvk",
+			},
+			wantErr: false,
+			validate: func(t *testing.T, cfg *Config) {
+				assert.Equal(t, "qbt_envkeyenvkeyenvkeyenvkeyenvk", cfg.Server.APIKey)
+			},
+		},
+		{
+			name: "api_key conflicts with username in config file",
+			configData: `[server]
+url = "http://localhost:8080"
+username = "admin"
+api_key = "qbt_testkeytestkeytestkeytestkey"`,
+			wantErr:     true,
+			errContains: "server.api_key cannot be combined",
+		},
 	}
 
 	for _, tt := range tests {
@@ -147,11 +180,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -195,11 +224,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid refresh interval",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -223,11 +248,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid default sort column",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -257,11 +278,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid default sort direction",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -292,11 +309,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid default sort",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -326,11 +339,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "invalid terminal title template",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -361,11 +370,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid terminal title template",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -395,11 +400,7 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "empty terminal title template is valid",
 			config: Config{
-				Server: struct {
-					URL      string `mapstructure:"url"`
-					Username string `mapstructure:"username"`
-					Password string `mapstructure:"password"`
-				}{
+				Server: ServerConfig{
 					URL: "http://localhost:8080",
 				},
 				UI: struct {
@@ -425,6 +426,82 @@ func TestConfigValidation(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "api_key alone is valid",
+			config: Config{
+				Server: ServerConfig{
+					URL:    "http://localhost:8080",
+					APIKey: "qbt_testkeytestkeytestkeytestkey",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "api_key combined with username is rejected",
+			config: Config{
+				Server: ServerConfig{
+					URL:      "http://localhost:8080",
+					Username: "admin",
+					APIKey:   "qbt_testkeytestkeytestkeytestkey",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+				},
+			},
+			wantErr: true,
+			errMsg:  "server.api_key cannot be combined",
+		},
+		{
+			name: "api_key combined with password is rejected",
+			config: Config{
+				Server: ServerConfig{
+					URL:      "http://localhost:8080",
+					Password: "secret",
+					APIKey:   "qbt_testkeytestkeytestkeytestkey",
+				},
+				UI: struct {
+					RefreshInterval int      `mapstructure:"refresh_interval"`
+					Columns         []string `mapstructure:"columns"`
+					DefaultSort     struct {
+						Column    string `mapstructure:"column"`
+						Direction string `mapstructure:"direction"`
+					} `mapstructure:"default_sort"`
+					TerminalTitle struct {
+						Enabled  bool   `mapstructure:"enabled"`
+						Template string `mapstructure:"template"`
+					} `mapstructure:"terminal_title"`
+				}{
+					RefreshInterval: 3,
+				},
+			},
+			wantErr: true,
+			errMsg:  "server.api_key cannot be combined",
 		},
 	}
 

@@ -29,6 +29,32 @@ func isSuccessStatus(code int) bool {
 	return code >= 200 && code < 300
 }
 
+// bearerAuthTransport injects "Authorization: Bearer <key>" on requests
+// targeting host, the host of the configured qBittorrent server. Used for
+// qBittorrent's stateless API-key auth (≥5.2.0). Per the qBittorrent docs,
+// API keys cannot be used against /api/v2/auth/login or /api/v2/auth/logout,
+// so a client built with this transport must not call Login.
+//
+// The host gate matters because net/http's built-in protection that strips
+// Authorization on a cross-host redirect only applies to headers set on the
+// original request — headers added inside a RoundTripper would otherwise be
+// re-attached on every follow-up, leaking the key if a server or proxy
+// redirected to a different origin.
+type bearerAuthTransport struct {
+	key  string
+	host string
+	base http.RoundTripper
+}
+
+func (t *bearerAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host != t.host {
+		return t.base.RoundTrip(req)
+	}
+	clone := req.Clone(req.Context())
+	clone.Header.Set("Authorization", "Bearer "+t.key)
+	return t.base.RoundTrip(clone)
+}
+
 func NewClient(baseURL string) (*Client, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -40,6 +66,30 @@ func NewClient(baseURL string) (*Client, error) {
 		httpClient: &http.Client{
 			Jar:     jar,
 			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+// NewClientWithAPIKey returns a Client that authenticates via qBittorrent's
+// stateless API-key mechanism (≥5.2.0). The key is sent as an
+// "Authorization: Bearer <key>" header on requests to the configured host.
+// No cookie jar is attached — API-key auth is stateless by design, and
+// keeping the jar nil prevents a proxy or future server change from
+// establishing a session cookie behind our back.
+//
+// Callers must not invoke Login on a client built this way — qBittorrent
+// rejects API keys at /api/v2/auth/login and /api/v2/auth/logout.
+func NewClientWithAPIKey(baseURL, apiKey string) (*Client, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" {
+		return nil, NewValidationError("invalid base URL", err)
+	}
+
+	return &Client{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		httpClient: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: &bearerAuthTransport{key: apiKey, host: u.Host, base: http.DefaultTransport},
 		},
 	}, nil
 }
