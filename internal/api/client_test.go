@@ -32,11 +32,17 @@ func TestNewClientWithAPIKey(t *testing.T) {
 	assert.NotNil(t, client)
 	assert.Equal(t, "http://localhost:8080", client.baseURL, "trailing slash should be trimmed")
 	assert.NotNil(t, client.httpClient)
-	assert.NotNil(t, client.httpClient.Jar)
+	assert.Nil(t, client.httpClient.Jar, "API-key clients should not attach a cookie jar")
 	require.NotNil(t, client.httpClient.Transport, "transport should be wired for bearer auth")
 	bt, ok := client.httpClient.Transport.(*bearerAuthTransport)
 	require.True(t, ok, "transport should be *bearerAuthTransport")
 	assert.Equal(t, "qbt_testkeytestkeytestkeytestkey", bt.key)
+	assert.Equal(t, "localhost:8080", bt.host, "transport host gate should match base URL host")
+}
+
+func TestNewClientWithAPIKeyInvalidURL(t *testing.T) {
+	_, err := NewClientWithAPIKey("not a url", "qbt_x")
+	assert.Error(t, err)
 }
 
 // TestClientAPIKeyHeader verifies that a client built with NewClientWithAPIKey
@@ -87,14 +93,73 @@ func TestClientAPIKeyHeader(t *testing.T) {
 
 			assert.Equal(t, wantAuth, sawAuth, "Authorization header missing or wrong")
 			assert.Empty(t, sawCookies, "API-key auth must not send cookies")
-
-			// Cookie jar should also be empty after the call — the server
-			// never issues a session cookie under API-key auth.
-			serverURL, _ := url.Parse(server.URL)
-			assert.Empty(t, client.httpClient.Jar.Cookies(serverURL), "cookie jar should stay empty")
 		})
 	}
 }
+
+// TestClientAPIKeyIgnoresSetCookie verifies that even if the server emits a
+// Set-Cookie header, the API-key client neither stores it nor replays it on
+// subsequent requests — the jar is nil, so there is no persistence surface.
+func TestClientAPIKeyIgnoresSetCookie(t *testing.T) {
+	const key = "qbt_testkeytestkeytestkeytestkey"
+
+	var requestCount int
+	var sawCookiesPerRequest [][]*http.Cookie
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		sawCookiesPerRequest = append(sawCookiesPerRequest, r.Cookies())
+		// Try to plant a cookie. A nil jar should drop it on the floor.
+		http.SetCookie(w, &http.Cookie{Name: "SID", Value: "should-not-persist", Path: "/"})
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("[]"))
+	}))
+	defer server.Close()
+
+	client, err := NewClientWithAPIKey(server.URL, key)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	_, err = client.GetTorrents(ctx)
+	require.NoError(t, err)
+	_, err = client.GetTorrents(ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, requestCount, "expected two server-observed requests")
+	assert.Empty(t, sawCookiesPerRequest[0], "first request must not send cookies")
+	assert.Empty(t, sawCookiesPerRequest[1], "second request must not replay a server-issued cookie")
+	assert.Nil(t, client.httpClient.Jar, "client must not grow a cookie jar")
+}
+
+// TestClientAPIKeyHostMismatch verifies the transport drops the Authorization
+// header for requests whose host doesn't match the configured base URL host.
+// This protects against credential leaks on cross-host redirects, which Go's
+// built-in protection cannot strip when the header is added inside a
+// RoundTripper rather than on the original request.
+func TestClientAPIKeyHostMismatch(t *testing.T) {
+	const key = "qbt_testkeytestkeytestkeytestkey"
+
+	tr := &bearerAuthTransport{
+		key:  key,
+		host: "qbittorrent.example.com:8080",
+		base: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: http.NoBody, Header: make(http.Header), Request: req}, nil
+		}),
+	}
+
+	matching, _ := http.NewRequest(http.MethodGet, "http://qbittorrent.example.com:8080/api/v2/torrents/info", nil)
+	resp, err := tr.RoundTrip(matching)
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer "+key, resp.Request.Header.Get("Authorization"), "matching host should carry the bearer token")
+
+	foreign, _ := http.NewRequest(http.MethodGet, "http://evil.example.com/steal", nil)
+	resp, err = tr.RoundTrip(foreign)
+	require.NoError(t, err)
+	assert.Empty(t, resp.Request.Header.Get("Authorization"), "foreign host must not receive the bearer token")
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestLoginWithActualServer(t *testing.T) {
 	if testing.Short() {
