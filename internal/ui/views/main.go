@@ -945,6 +945,17 @@ func (m *MainView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+
+	case tea.PasteMsg:
+		if m.showAddDialog && m.addDialog.mode == ModeURL {
+			m.addDialog.urlInput.url = appendPrintable(m.addDialog.urlInput.url, msg.Content)
+		} else if m.showLocationDialog && m.locationDialog.mode == LocationModeText {
+			m.locationDialog.pathInput.path = appendPrintable(m.locationDialog.pathInput.path, msg.Content)
+			m.locationDialog.pathInput.cursor = len(m.locationDialog.pathInput.path)
+		} else if m.filterPanel.IsInInputMode() {
+			m.filterPanel, cmd = m.filterPanel.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -1915,6 +1926,16 @@ func (m *MainView) handleFileNavigatorKeys(key string) tea.Cmd {
 	return nil
 }
 
+// appendPrintable appends only printable ASCII characters from s to dst.
+func appendPrintable(dst, s string) string {
+	for _, r := range s {
+		if r >= 32 && r <= 126 {
+			dst += string(r)
+		}
+	}
+	return dst
+}
+
 // handleURLInputKeys handles keyboard input for URL input
 func (m *MainView) handleURLInputKeys(keyMsg tea.KeyPressMsg) tea.Cmd {
 	urlInput := m.addDialog.urlInput
@@ -1929,18 +1950,10 @@ func (m *MainView) handleURLInputKeys(keyMsg tea.KeyPressMsg) tea.Cmd {
 			urlInput.url = urlInput.url[:len(urlInput.url)-1]
 		}
 	case "ctrl+a":
-		// Select all (clear field)
 		urlInput.url = ""
 	default:
-		// Handle character input - this includes paste operations
-		// Bubble Tea v2 provides the input as Text (string) instead of Runes
 		if len(keyMsg.Text) > 0 {
-			for _, r := range keyMsg.Text {
-				// Only add printable characters (includes all URL chars: :, /, ?, =, etc.)
-				if r >= 32 && r <= 126 {
-					urlInput.url += string(r)
-				}
-			}
+			urlInput.url = appendPrintable(urlInput.url, keyMsg.Text)
 		}
 	}
 
@@ -1962,24 +1975,15 @@ func (m *MainView) handlePathInputKeys(keyMsg tea.KeyPressMsg) tea.Cmd {
 			pathInput.cursor = len(pathInput.path)
 		}
 	case "ctrl+a":
-		// Select all (clear field)
 		pathInput.path = ""
 		pathInput.cursor = 0
 	case "ctrl+u":
-		// Clear to beginning of line
 		pathInput.path = ""
 		pathInput.cursor = 0
 	default:
-		// Handle character input - this includes paste operations
-		// Bubble Tea v2 provides the input as Text (string) instead of Runes
 		if len(keyMsg.Text) > 0 {
-			for _, r := range keyMsg.Text {
-				// Only add printable characters (includes path chars: /, -, _, etc.)
-				if r >= 32 && r <= 126 {
-					pathInput.path += string(r)
-					pathInput.cursor++
-				}
-			}
+			pathInput.path = appendPrintable(pathInput.path, keyMsg.Text)
+			pathInput.cursor = len(pathInput.path)
 		}
 	}
 
