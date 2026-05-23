@@ -163,6 +163,11 @@ func (f *FilterPanel) Update(msg tea.Msg) (*FilterPanel, tea.Cmd) {
 				f.clearFilters()
 			}
 		}
+
+	case tea.PasteMsg:
+		if f.mode == FilterModeSearch {
+			f.searchInput, cmd = f.searchInput.Update(msg)
+		}
 	}
 
 	return f, cmd

@@ -1928,12 +1928,15 @@ func (m *MainView) handleFileNavigatorKeys(key string) tea.Cmd {
 
 // appendPrintable appends only printable ASCII characters from s to dst.
 func appendPrintable(dst, s string) string {
+	var b strings.Builder
+	b.Grow(len(dst) + len(s))
+	b.WriteString(dst)
 	for _, r := range s {
 		if r >= 32 && r <= 126 {
-			dst += string(r)
+			b.WriteRune(r)
 		}
 	}
-	return dst
+	return b.String()
 }
 
 // handleURLInputKeys handles keyboard input for URL input
