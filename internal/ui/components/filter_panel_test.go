@@ -279,3 +279,23 @@ func stripANSI(s string) string {
 	}
 	return result
 }
+
+func TestFilterPanel_PasteInSearchMode(t *testing.T) {
+	panel := NewFilterPanel()
+
+	// Enter search mode
+	panel, _ = panel.Update(keyPress('/'))
+	assert.Equal(t, FilterModeSearch, panel.mode)
+
+	// Paste text
+	panel, _ = panel.Update(tea.PasteMsg{Content: "ubuntu"})
+	assert.Equal(t, "ubuntu", panel.searchInput.Value())
+}
+
+func TestFilterPanel_PasteIgnoredOutsideSearchMode(t *testing.T) {
+	panel := NewFilterPanel()
+	assert.Equal(t, FilterModeNone, panel.mode)
+
+	panel, _ = panel.Update(tea.PasteMsg{Content: "ignored"})
+	assert.Equal(t, "", panel.searchInput.Value())
+}

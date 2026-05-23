@@ -119,3 +119,50 @@ func TestPasteIgnoredInFileMode(t *testing.T) {
 		t.Error("paste should be ignored when add dialog is in file mode")
 	}
 }
+
+func TestPasteIntoFilterSearch(t *testing.T) {
+	m := newTestMainView()
+
+	// Enter filter search mode (press '/')
+	m.filterPanel, _ = m.filterPanel.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	if !m.filterPanel.IsInInputMode() {
+		t.Fatal("filter panel should be in search mode")
+	}
+
+	m.Update(tea.PasteMsg{Content: "ubuntu"})
+
+	if m.filterPanel.GetFilter().Search != "" {
+		t.Error("search filter should not be committed until Enter is pressed")
+	}
+
+	// Press Enter to commit the search
+	m.filterPanel, _ = m.filterPanel.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if m.filterPanel.GetFilter().Search != "ubuntu" {
+		t.Errorf("filter search after paste+enter: got %q, want %q", m.filterPanel.GetFilter().Search, "ubuntu")
+	}
+}
+
+func TestPasteFilterSearchIgnoredWhenDialogOpen(t *testing.T) {
+	m := newTestMainView()
+
+	// Enter filter search mode
+	m.filterPanel, _ = m.filterPanel.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+
+	// Open add dialog — it should take priority over the filter panel
+	m.showAddDialog = true
+	m.addDialog.mode = ModeURL
+
+	m.Update(tea.PasteMsg{Content: "magnet:?xt=test"})
+
+	// Paste should go to the URL input, not the filter
+	if m.addDialog.urlInput.url != "magnet:?xt=test" {
+		t.Errorf("paste should go to URL input when dialog is open, got %q", m.addDialog.urlInput.url)
+	}
+
+	// Confirm filter search was NOT updated
+	m.filterPanel, _ = m.filterPanel.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.filterPanel.GetFilter().Search != "" {
+		t.Error("filter search should not receive paste when add dialog is open")
+	}
+}
