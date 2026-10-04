@@ -1,5 +1,7 @@
 package api
 
+import "encoding/json"
+
 type Torrent struct {
 	Hash             string  `json:"hash"`
 	Name             string  `json:"name"`
@@ -210,9 +212,25 @@ func (p *PartialTorrent) ToTorrent() Torrent {
 
 // Category represents a torrent category
 type Category struct {
-	Name         string `json:"name"`
-	SavePath     string `json:"savePath"`
-	DownloadPath string `json:"download_path"`
+	Name         string       `json:"name"`
+	SavePath     string       `json:"savePath"`
+	DownloadPath DownloadPath `json:"download_path"`
+}
+
+// DownloadPath is a category's incomplete download path. qBittorrent sends a
+// string when a path is set, false when explicitly disabled, and null when unset;
+// the latter two decode to an empty path.
+type DownloadPath string
+
+func (d *DownloadPath) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		// Not a string (false/null/other): treat as no path
+		*d = ""
+		return nil
+	}
+	*d = DownloadPath(s)
+	return nil
 }
 
 type TorrentProperties struct {
